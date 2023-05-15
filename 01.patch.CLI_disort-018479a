@@ -1,0 +1,659 @@
+diff --git a/src/cdisort/cdisort.c b/src/cdisort/cdisort.c
+index f2ae668..e474c6d 100644
+--- a/src/cdisort/cdisort.c
++++ b/src/cdisort/cdisort.c
+@@ -694,10 +694,10 @@ void c_disort(disort_state  *ds,
+     tplanck = 0.;
+   }
+   else {
+-    tplanck = c_planck_func1(ds->wvnmlo,ds->wvnmhi,ds->bc.ttemp)*ds->bc.temis;
+-    bplanck = c_planck_func1(ds->wvnmlo,ds->wvnmhi,ds->bc.btemp);
++    tplanck = c_planck_func2(ds->wvnmlo,ds->wvnmhi,ds->bc.ttemp)*ds->bc.temis;
++    bplanck = c_planck_func2(ds->wvnmlo,ds->wvnmhi,ds->bc.btemp);
+     for (lev = 0; lev <= ds->nlyr; lev++) {
+-      PKAG(lev) = c_planck_func1(ds->wvnmlo,ds->wvnmhi,TEMPER(lev));
++      PKAG(lev) = c_planck_func2(ds->wvnmlo,ds->wvnmhi,TEMPER(lev));
+     }
+   }
+ 
+@@ -3005,7 +3005,7 @@ void c_new_intensity_correction(disort_state  *ds,
+       /* BDE ** to actual phase function            */
+ 
+       /* !!! +1: locate starts counting from 0! */
+-      it = locate ( ds->mu_phase, ds->nphase, ctheta ) + 1;
++      it = locate_disort ( ds->mu_phase, ds->nphase, ctheta ) + 1;
+ 
+       for (lc=1; lc<=ncut; lc++)
+ 	PHASA(lc) = DSPHASE(it,lc)
+@@ -3363,7 +3363,7 @@ double calc_phase_squared (int           nphase,
+     /* special case: second scattering angle does not depend on
+        azimuth of first scattering angle */
+     if (ctheta==1.0 || MU_EQ(j,lu)==1.0) {
+-      it = locate ( mu_phase, nphase, MU_EQ(j,lu)*ctheta ) + 1;
++      it = locate_disort ( mu_phase, nphase, MU_EQ(j,lu)*ctheta ) + 1;
+       phint = M_PI * ( PHAS2(it,lu)
+ 		       + ( MU_EQ(j,lu)*ctheta - MUP(it) )
+ 		       / ( MUP (it+1) - MUP(it) )
+@@ -3389,8 +3389,8 @@ double calc_phase_squared (int           nphase,
+ 	cutting=FALSE;
+ 
+       if (mumin<mumax) {
+-	imin = locate ( mu_phase, nphase, mumin)+1;
+-	imax = locate ( mu_phase, nphase, mumax)+1;
++	imin = locate_disort ( mu_phase, nphase, mumin)+1;
++	imax = locate_disort ( mu_phase, nphase, mumax)+1;
+ 
+ 	k=imin;
+ 	/* assuming SPF is linear in mu */
+@@ -3651,7 +3651,9 @@ void c_disort_set(disort_state *ds,
+      */
+     for (iq = 1; iq <= *nn; iq++) {      
+       if (fabs(ds->bc.umu0-CMU(iq))/fabs(ds->bc.umu0) < 1.e-4) {
+-        c_errmsg("cdisort_set--beam angle=computational angle; change ds.nstr",DS_ERROR);
++        // suppress error msg by adding a small difference
++        ds->bc.umu0 = (1. + 1.E-4)*CMU(iq);
++        // c_errmsg("cdisort_set--beam angle=computational angle; change ds.nstr",DS_ERROR);
+       }
+     }
+   }
+@@ -6191,7 +6193,7 @@ void c_check_inputs(disort_state *ds,
+   }
+ 
+   if (ds->flag.planck && ds->flag.ibcnd != SPECIAL_BC) {
+-    if (ds->wvnmlo < 0. || ds->wvnmhi <= ds->wvnmlo) {
++    if (ds->wvnmlo < 0. || ds->wvnmhi < ds->wvnmlo) {
+       inperr = c_write_bad_var(VERBOSE,"ds.wvnmlo,hi");
+     }
+     if (ds->bc.temis < 0. || ds->bc.temis > 1.) {
+@@ -7944,7 +7946,7 @@ void c_albtrans_spherical(disort_state *ds,
+ 
+ #define MAX_WARNINGS 100
+ 
+-void c_errmsg(char *messag,
++void c_errmsg(char const *messag,
+               int   type)
+ {
+   static int
+@@ -7984,7 +7986,7 @@ void c_errmsg(char *messag,
+  ----------------------------------------------------------------------*/
+ 
+ int c_write_bad_var(int   quiet,
+-                    char *varnam)
++                    char const *varnam)
+ {
+   const int
+     maxmsg = 50;
+@@ -8016,7 +8018,7 @@ int c_write_bad_var(int   quiet,
+  ----------------------------------------------------------------------*/
+ 
+ int c_write_too_small_dim(int   quiet,
+-                          char *dimnam,
++                          char const *dimnam,
+                           int   minval)
+ {
+   if (quiet != QUIET) {
+@@ -11048,7 +11050,7 @@ void c_twostr_solve_bc(disort_state *ds,
+ #define VCUT  (1.5)
+ #define PLKF(x) ({const double _x = (x); _x*_x*_x/(exp(_x)-1.);})
+ 
+-double c_planck_func2(double wnumlo,
++double __attribute__((weak)) c_planck_func2(double wnumlo,
+                       double wnumhi,
+                       double t)
+ {
+@@ -11069,7 +11071,7 @@ double c_planck_func2(double wnumlo,
+     sigdpi = SIGMA/M_PI;
+     vmax   = log(DBL_MAX);
+     conc   = 15./pow(M_PI,4.);
+-    c1     = 1.1911e-18;  
++    c1     = 1.1911e-8;  
+ 
+     initialized = TRUE;
+   }
+@@ -11513,7 +11515,7 @@ void c_twostr_out_free(disort_state  *ds,
+ 
+ double *c_dbl_vector(int  nl, 
+ 		     int  nh,
+-		     char *name)
++		     char const *name)
+ {
+   unsigned int  
+     len_safe;
+@@ -11553,7 +11555,7 @@ double *c_dbl_vector(int  nl,
+ 
+ int *c_int_vector(int  nl, 
+ 		  int  nh,
+-		  char *name)
++		  char const *name)
+ {
+   unsigned int  
+     len_safe;
+diff --git a/src/cdisort/cdisort.h b/src/cdisort/cdisort.h
+index 50ea987..94a73f1 100644
+--- a/src/cdisort/cdisort.h
++++ b/src/cdisort/cdisort.h
+@@ -135,9 +135,9 @@ typedef struct {
+ } disort_brdf;
+ 
+ 
+-typedef struct {
++typedef struct disort_state {
+   char
+-    header[128];
++    header[1024];
+   disort_flag
+     flag;
+   disort_bc
+@@ -174,7 +174,7 @@ typedef struct {
+     *gensrcu;   /* User specified general source at user angles                        */
+ } disort_state;
+ 
+-typedef struct {
++typedef struct disort_output {
+   disort_radiant
+    *rad;       /* See typedef disort_radiant                                           */
+   double
+@@ -1035,14 +1035,14 @@ void c_albtrans_spherical(disort_state *ds,
+                           double       *sflup,
+                           double       *sfldn);
+ 
+-void c_errmsg(char *messag,
++void c_errmsg(char const *messag,
+               int   type);
+ 
+ int c_write_bad_var(int   quiet,
+-                    char *varnam);
++                    char const *varnam);
+ 
+ int c_write_too_small_dim(int   quiet,
+-                          char *dimnam,
++                          char const *dimnam,
+                           int   minval);
+ 
+ void c_sgbco(double *abd,
+@@ -1251,10 +1251,10 @@ void c_twostr_out_free(disort_state  *ds,
+ 
+ double *c_dbl_vector(int  nl, 
+                      int  nh,
+-		     char *name);
++		     char const *name);
+ int *c_int_vector(int  nl, 
+ 		  int  nh,
+-		  char *name);
++		  char const *name);
+ 
+ void print_test(disort_state  *ds_calc,
+                 disort_output *calc,
+diff --git a/src/cdisort/locate.c b/src/cdisort/locate.c
+index 17b69be..655b592 100644
+--- a/src/cdisort/locate.c
++++ b/src/cdisort/locate.c
+@@ -1,5 +1,5 @@
+ /*--------------------------------------------------------------------
+- * $Id: locate.c 2623 2011-12-23 10:52:38Z robert.buras $
++ * $Id: locate_disort.c 2623 2011-12-23 10:52:38Z robert.buras $
+  * 
+  * This file is part of libRadtran.
+  * Copyright (c) 1997-2012 by Arve Kylling, Bernhard Mayer,
+@@ -26,10 +26,10 @@
+ #include <stdio.h>
+ #include <stdlib.h>
+ 
+-int locate (double *xx, int n, double x)
++int locate_disort (double *xx, int n, double x)
+ /* Given an array xx[1..n], and given a value x, returns a value j such that x is between xx[j] */
+ /* and xx[j+1]. xx must be monotonic, either increasing or decreasing. j=0 or j=n is returned   */
+-/* to indicate that x is out of range. A unit-offset array xx is assumed. To use locate with    */
++/* to indicate that x is out of range. A unit-offset array xx is assumed. To use locate_disort with    */
+ /* a zero-offset array, remember to subtract 1 from the address of xx, and also                 */
+ /* from the returned value j.                                                                   */
+ /*                                                                                              */
+@@ -72,10 +72,10 @@ int locate (double *xx, int n, double x)
+ } 
+ 
+ 
+-int flocate (float *xx, int n, float x)
++int flocate_disort (float *xx, int n, float x)
+ /* Given an array xx[1..n], and given a value x, returns a value j such that x is between xx[j] */
+ /* and xx[j+1]. xx must be monotonic, either increasing or decreasing. j=0 or j=n is returned   */
+-/* to indicate that x is out of range. A unit-offset array xx is assumed. To use locate with    */
++/* to indicate that x is out of range. A unit-offset array xx is assumed. To use locate_disort with    */
+ /* a zero-offset array, remember to subtract 1 from the address of xx, and also                 */
+ /* from the returned value j.                                                                   */
+ /*                                                                                              */
+diff --git a/src/cdisort/locate.h b/src/cdisort/locate.h
+index 660e2b9..f6d9599 100644
+--- a/src/cdisort/locate.h
++++ b/src/cdisort/locate.h
+@@ -1,5 +1,5 @@
+ /*--------------------------------------------------------------------
+- * $Id: locate.h 2623 2011-12-23 10:52:38Z robert.buras $
++ * $Id: locate_disort.h 2623 2011-12-23 10:52:38Z robert.buras $
+  * 
+  * This file is part of libRadtran.
+  * Copyright (c) 1997-2012 by Arve Kylling, Bernhard Mayer,
+@@ -23,15 +23,15 @@
+  * Boston, MA 02111-1307, USA.
+  *--------------------------------------------------------------------*/
+ 
+-#ifndef __locate_h
+-#define __locate_h
++#ifndef __locate_disort_h
++#define __locate_disort_h
+ 
+ #if defined (__cplusplus)
+ extern "C" {
+ #endif
+ 
+-int locate (double *xx, int n, double x);
+-int flocate (float *xx, int n, float x);
++int locate_disort (double *xx, int n, double x);
++int flocate_disort (float *xx, int n, float x);
+ 
+ #if defined (__cplusplus)
+ }
+diff --git a/tests/cdisort/CMakeLists.txt b/tests/cdisort/CMakeLists.txt
+index 33e8f81..ec6a01c 100644
+--- a/tests/cdisort/CMakeLists.txt
++++ b/tests/cdisort/CMakeLists.txt
+@@ -4,7 +4,7 @@ string(TOUPPER ${CMAKE_BUILD_TYPE} buildu)
+ 
+ # Compile test_cdisort.c
+ 
+-add_executable(test_cdisort.${buildl} test_cdisort.c)
++add_executable(test_cdisort.${buildl} test_cdisort.c print_test.c)
+ 
+ set_target_properties(test_cdisort.${buildl}
+ 	PROPERTIES
+diff --git a/tests/cdisort/print_test.c b/tests/cdisort/print_test.c
+new file mode 100644
+index 0000000..7a11e0c
+--- /dev/null
++++ b/tests/cdisort/print_test.c
+@@ -0,0 +1,182 @@
++
++#include <cdisort/cdisort.h>
++
++/*========================== print_test() ================================*/
++
++/*
++ * Print DISORT results and, directly beneath them, their ratios to the 
++ * correct answers, calc/good, or 1.+calc in the case good = 0.;
++ * print number of non-unit ratios that occur but try
++ * to count just the cases where there is a real disagreement and not
++ * those where flux or intensity are down at their noise level (defined as
++ * 10^(-6) times their maximum value).  d(flux)/d(tau) is treated the
++ * same as fluxes in this noise estimation even though it is a different
++ * type of quantity (although with flux units).
++ *
++ * Correct input values are "good"; calculated input values are "calc".
++ *
++ * Fortran name: prtfin().
++ */
++
++#undef  BAD_RATIO
++#define BAD_RATIO(r) ((r) < 0.99 || (r) > 1.01)
++
++/* Using unit-offset shift macros to match Fortran version */
++
++/* Disort-specific shift macros */
++#undef  UMU
++#define UMU(iu)    ds_good->umu[iu-1]
++#undef  UTAU
++#define UTAU(lu)   ds_good->utau[lu-1]
++
++/* Disotest-specific shift macros */
++#undef  GOODUU
++#define GOODUU(iu,lu,j) good->uu[iu-1+(lu-1+(j-1)*ds_good->ntau)*ds_good->numu]
++#undef  CALCUU
++#define CALCUU(iu,lu,j) calc->uu[iu-1+(lu-1+(j-1)*ds_calc->ntau)*ds_calc->numu]
++
++void print_test(disort_state  *ds_calc,
++                disort_output *calc,
++                disort_state  *ds_good,
++                disort_output *good)
++{
++  register int
++    iu,j,lu,numbad;
++  //extern void
++    //  c_errmsg();
++  //extern double
++    // c_ratio();
++  double
++    flxmax,umax,fnoise,unoise,
++    rat1,rat2,rat3,rat4,
++    ratv[ds_good->nphi];
++
++  flxmax = 0.0;
++  for (lu = 0; lu < ds_good->ntau; lu++) {
++    flxmax = MAX(MAX(MAX(flxmax,good->rad[lu].rfldir),good->rad[lu].rfldn),good->rad[lu].flup);
++  }
++
++  fnoise = 1.e-6*flxmax;
++  if (flxmax <= 0.) {
++    c_errmsg("print_test()--all fluxes zero or negative",DS_WARNING);
++  }
++  if (fnoise <= 0.) {
++    c_errmsg("print_test()--all fluxes near underflowing",DS_WARNING);
++  }
++
++  numbad = 0;
++
++  fprintf(stdout,"\n\n                  <-------------- FLUXES -------------->\n"
++                 "    Optical       Downward       Downward         Upward    d(Net Flux)\n"
++                 "      Depth         Direct        Diffuse        Diffuse    / d(Op Dep)\n");
++
++  for (lu = 1; lu <= ds_good->ntau; lu++) {
++    fprintf(stdout,"%11.4f%15.4e%15.4e%15.4e%15.4e\n",
++                   UTAU(lu),calc->rad[lu-1].rfldir,calc->rad[lu-1].rfldn,calc->rad[lu-1].flup,calc->rad[lu-1].dfdt);
++
++    fprintf(stdout,"%11.4f%15.4e%15.4e%15.4e%15.4e\n",
++                   UTAU(lu),good->rad[lu-1].rfldir,good->rad[lu-1].rfldn,good->rad[lu-1].flup,good->rad[lu-1].dfdt);
++
++    rat1 = c_ratio(calc->rad[lu-1].rfldir,good->rad[lu-1].rfldir);
++    rat2 = c_ratio(calc->rad[lu-1].rfldn, good->rad[lu-1].rfldn);
++    rat3 = c_ratio(calc->rad[lu-1].flup,  good->rad[lu-1].flup);
++    rat4 = c_ratio(calc->rad[lu-1].dfdt,  good->rad[lu-1].dfdt);
++
++    fprintf(stdout,"               (%9.4f)    (%9.4f)    (%9.4f)    (%9.4f)\n",rat1,rat2,rat3,rat4);
++
++    /*
++     * NOTE: In the original Fortran, for a/b, ratio() returns a huge number if b == 0., hence
++     *       there is an extra conditional of the form fabs(output) > fnoise so that nearly-zero output
++     *       will not be counted as bad. In contrast, this C version has ratio() returning 1.+a when b == 0.,
++     *       hence the conditional involving fnoise is removed (the same applies to unoise below).
++     */
++    if(BAD_RATIO(rat1)) numbad++;
++    if(BAD_RATIO(rat2)) numbad++;
++    if(BAD_RATIO(rat3)) numbad++;
++    if(BAD_RATIO(rat4)) numbad++;
++  }
++
++  if (!ds_good->flag.onlyfl) {
++    /*
++     * Print intensities
++     */
++    umax = 0.;
++    for (j = 1; j <= ds_good->nphi; j++) {
++      for (lu = 1; lu <= ds_good->ntau; lu++) {
++        for (iu = 1; iu <= ds_good->numu; iu++) {
++          umax = MAX(umax,GOODUU(iu,lu,j));
++        }
++      }
++    }
++
++    unoise = 1.e-6*umax;
++
++    if (umax <= 0.) {
++      c_errmsg("print_test()--all intensities zero or negative",DS_WARNING);
++    }
++
++    if (unoise <= 0.) {
++      c_errmsg("print_test()--all intensities near underflowing",DS_WARNING);
++    }
++
++    fprintf(stdout,"\n\n ********  I N T E N S I T I E S  *********"
++                   "\n\n             Polar   Azimuthal Angles (Degrees)"
++                   "\n   Optical   Angle"
++                   "\n     Depth  Cosine");
++    for (j = 0; j < ds_good->nphi; j++) {
++      fprintf(stdout,"%10.1f    ",ds_good->phi[j]);
++    }
++    fprintf(stdout,"\n");
++
++    for (lu = 1; lu <= ds_good->ntau; lu++) {
++      for (iu = 1; iu <= ds_good->numu; iu++) {
++        if (iu == 1) {
++          fprintf(stdout,"\n%10.3f%8.3f",UTAU(lu),UMU(iu));
++          for (j = 1; j <= ds_good->nphi; j++) {
++            fprintf(stdout,"%14.4e",CALCUU(iu,lu,j));
++          }
++          fprintf(stdout,"\n");
++        }
++        if (iu > 1) {
++          fprintf(stdout,"          %8.3f",UMU(iu));
++          for(j = 1; j <= ds_good->nphi; j++) {
++            fprintf(stdout,"%14.4e",CALCUU(iu,lu,j));
++          }
++          fprintf(stdout,"\n");
++        }
++        for (j = 1; j <= ds_good->nphi; j++) {
++          ratv[j-1] = c_ratio(CALCUU(iu,lu,j),GOODUU(iu,lu,j));
++          /*
++           * NOTE: This C version has the conditional fabs(output) > unoise removed;
++           *       see note above regarding fnoise.
++           */
++          if(BAD_RATIO(ratv[j-1])) {
++            numbad++;
++          }
++        }
++        fprintf(stdout,"                  ");
++        for (j = 1; j <= ds_good->nphi; j++) {
++          fprintf(stdout,"   (%9.4f)",ratv[j-1]);
++        }
++        fprintf(stdout,"\n");
++      }
++    }
++  }
++
++  if (numbad > 0) {
++    if (numbad == 1) {
++      fprintf(stdout,"\n\n =============================================\n"
++                     " ====  %4d  SERIOUSLY NON-UNIT RATIO     ====\n"
++                     " =============================================\n",numbad);
++    }
++    else {
++      fprintf(stdout,"\n\n =============================================\n"
++                     " ====  %4d  SERIOUSLY NON-UNIT RATIOS    ====\n"
++                     " =============================================\n",numbad);
++    }
++  }
++
++  return;
++}
++
++/*========================== end of print_test() =========================*/
+diff --git a/tests/cdisort/test_cdisort.c b/tests/cdisort/test_cdisort.c
+index ce5cb94..4003061 100644
+--- a/tests/cdisort/test_cdisort.c
++++ b/tests/cdisort/test_cdisort.c
+@@ -168,8 +168,8 @@ void disort_test01(void)
+     out,good;
+   register int
+     icas;
+-  extern void
+-    c_disort(),c_errmsg(),c_getmom();
++  //extern void
++    //  c_disort(),c_errmsg(),c_getmom();
+ 
+   ds.accur = 0.;
+   ds.flag.prnt[0]=TRUE, ds.flag.prnt[1]=FALSE, ds.flag.prnt[2]=FALSE, ds.flag.prnt[3]=FALSE, ds.flag.prnt[4]=TRUE;
+@@ -2837,188 +2837,5 @@ void disort_test14(void)
+ 
+ /*========================== end of disort_test14() ======================*/
+ 
+-/*========================== print_test() ================================*/
+-
+-/*
+- * Print DISORT results and, directly beneath them, their ratios to the 
+- * correct answers, calc/good, or 1.+calc in the case good = 0.;
+- * print number of non-unit ratios that occur but try
+- * to count just the cases where there is a real disagreement and not
+- * those where flux or intensity are down at their noise level (defined as
+- * 10^(-6) times their maximum value).  d(flux)/d(tau) is treated the
+- * same as fluxes in this noise estimation even though it is a different
+- * type of quantity (although with flux units).
+- *
+- * Correct input values are "good"; calculated input values are "calc".
+- *
+- * Fortran name: prtfin().
+- */
+-
+-#undef  BAD_RATIO
+-#define BAD_RATIO(r) ((r) < 0.99 || (r) > 1.01)
+-
+-/* Using unit-offset shift macros to match Fortran version */
+-
+-/* Disort-specific shift macros */
+-#undef  UMU
+-#define UMU(iu)    ds_good->umu[iu-1]
+-#undef  UTAU
+-#define UTAU(lu)   ds_good->utau[lu-1]
+-
+-/* Disotest-specific shift macros */
+-#undef  GOODUU
+-#define GOODUU(iu,lu,j) good->uu[iu-1+(lu-1+(j-1)*ds_good->ntau)*ds_good->numu]
+-#undef  CALCUU
+-#define CALCUU(iu,lu,j) calc->uu[iu-1+(lu-1+(j-1)*ds_calc->ntau)*ds_calc->numu]
+-
+-void print_test(disort_state  *ds_calc,
+-                disort_output *calc,
+-                disort_state  *ds_good,
+-                disort_output *good)
+-{
+-  register int
+-    iu,j,lu,numbad;
+-  extern void
+-    c_errmsg();
+-  extern double
+-    c_ratio();
+-  double
+-    flxmax,umax,fnoise,unoise,
+-    rat1,rat2,rat3,rat4,
+-    ratv[ds_good->nphi];
+-
+-  flxmax = 0.0;
+-  for (lu = 0; lu < ds_good->ntau; lu++) {
+-    flxmax = MAX(MAX(MAX(flxmax,good->rad[lu].rfldir),good->rad[lu].rfldn),good->rad[lu].flup);
+-  }
+-
+-  fnoise = 1.e-6*flxmax;
+-  if (flxmax <= 0.) {
+-    c_errmsg("print_test()--all fluxes zero or negative",DS_WARNING);
+-  }
+-  if (fnoise <= 0.) {
+-    c_errmsg("print_test()--all fluxes near underflowing",DS_WARNING);
+-  }
+-
+-  numbad = 0;
+-
+-  fprintf(stdout,"\n\n                  <-------------- FLUXES -------------->\n"
+-                 "    Optical       Downward       Downward         Upward    d(Net Flux)\n"
+-                 "      Depth         Direct        Diffuse        Diffuse    / d(Op Dep)\n");
+-
+-  for (lu = 1; lu <= ds_good->ntau; lu++) {
+-    fprintf(stdout,"%11.4f%15.4e%15.4e%15.4e%15.4e\n",
+-                   UTAU(lu),calc->rad[lu-1].rfldir,calc->rad[lu-1].rfldn,calc->rad[lu-1].flup,calc->rad[lu-1].dfdt);
+-
+-    fprintf(stdout,"%11.4f%15.4e%15.4e%15.4e%15.4e\n",
+-                   UTAU(lu),good->rad[lu-1].rfldir,good->rad[lu-1].rfldn,good->rad[lu-1].flup,good->rad[lu-1].dfdt);
+-
+-    rat1 = c_ratio(calc->rad[lu-1].rfldir,good->rad[lu-1].rfldir);
+-    rat2 = c_ratio(calc->rad[lu-1].rfldn, good->rad[lu-1].rfldn);
+-    rat3 = c_ratio(calc->rad[lu-1].flup,  good->rad[lu-1].flup);
+-    rat4 = c_ratio(calc->rad[lu-1].dfdt,  good->rad[lu-1].dfdt);
+-
+-    fprintf(stdout,"               (%9.4f)    (%9.4f)    (%9.4f)    (%9.4f)\n",rat1,rat2,rat3,rat4);
+-
+-    /*
+-     * NOTE: In the original Fortran, for a/b, ratio() returns a huge number if b == 0., hence
+-     *       there is an extra conditional of the form fabs(output) > fnoise so that nearly-zero output
+-     *       will not be counted as bad. In contrast, this C version has ratio() returning 1.+a when b == 0.,
+-     *       hence the conditional involving fnoise is removed (the same applies to unoise below).
+-     */
+-    if(BAD_RATIO(rat1)) numbad++;
+-    if(BAD_RATIO(rat2)) numbad++;
+-    if(BAD_RATIO(rat3)) numbad++;
+-    if(BAD_RATIO(rat4)) numbad++;
+-  }
+-
+-  if (!ds_good->flag.onlyfl) {
+-    /*
+-     * Print intensities
+-     */
+-    umax = 0.;
+-    for (j = 1; j <= ds_good->nphi; j++) {
+-      for (lu = 1; lu <= ds_good->ntau; lu++) {
+-        for (iu = 1; iu <= ds_good->numu; iu++) {
+-          umax = MAX(umax,GOODUU(iu,lu,j));
+-        }
+-      }
+-    }
+-
+-    unoise = 1.e-6*umax;
+-
+-    if (umax <= 0.) {
+-      c_errmsg("print_test()--all intensities zero or negative",DS_WARNING);
+-    }
+-
+-    if (unoise <= 0.) {
+-      c_errmsg("print_test()--all intensities near underflowing",DS_WARNING);
+-    }
+-
+-    fprintf(stdout,"\n\n ********  I N T E N S I T I E S  *********"
+-                   "\n\n             Polar   Azimuthal Angles (Degrees)"
+-                   "\n   Optical   Angle"
+-                   "\n     Depth  Cosine");
+-    for (j = 0; j < ds_good->nphi; j++) {
+-      fprintf(stdout,"%10.1f    ",ds_good->phi[j]);
+-    }
+-    fprintf(stdout,"\n");
+-
+-    for (lu = 1; lu <= ds_good->ntau; lu++) {
+-      for (iu = 1; iu <= ds_good->numu; iu++) {
+-        if (iu == 1) {
+-          fprintf(stdout,"\n%10.3f%8.3f",UTAU(lu),UMU(iu));
+-          for (j = 1; j <= ds_good->nphi; j++) {
+-            fprintf(stdout,"%14.4e",CALCUU(iu,lu,j));
+-          }
+-          fprintf(stdout,"\n");
+-        }
+-        if (iu > 1) {
+-          fprintf(stdout,"          %8.3f",UMU(iu));
+-          for(j = 1; j <= ds_good->nphi; j++) {
+-            fprintf(stdout,"%14.4e",CALCUU(iu,lu,j));
+-          }
+-          fprintf(stdout,"\n");
+-        }
+-        for (j = 1; j <= ds_good->nphi; j++) {
+-          ratv[j-1] = c_ratio(CALCUU(iu,lu,j),GOODUU(iu,lu,j));
+-          /*
+-           * NOTE: This C version has the conditional fabs(output) > unoise removed;
+-           *       see note above regarding fnoise.
+-           */
+-          if(BAD_RATIO(ratv[j-1])) {
+-            numbad++;
+-          }
+-        }
+-        fprintf(stdout,"                  ");
+-        for (j = 1; j <= ds_good->nphi; j++) {
+-          fprintf(stdout,"   (%9.4f)",ratv[j-1]);
+-        }
+-        fprintf(stdout,"\n");
+-      }
+-    }
+-  }
+-
+-  if (numbad > 0) {
+-    if (numbad == 1) {
+-      fprintf(stdout,"\n\n =============================================\n"
+-                     " ====  %4d  SERIOUSLY NON-UNIT RATIO     ====\n"
+-                     " =============================================\n",numbad);
+-    }
+-    else {
+-      fprintf(stdout,"\n\n =============================================\n"
+-                     " ====  %4d  SERIOUSLY NON-UNIT RATIOS    ====\n"
+-                     " =============================================\n",numbad);
+-    }
+-  }
+-
+-  return;
+-}
+-
+-/*========================== end of print_test() =========================*/
+-
+-#undef GOODUU
+-#undef PMOM
+-
+ /* * * * * * * * * * * * * * end of disotest.c  * * * * * * * * * * * * * */
+ 
