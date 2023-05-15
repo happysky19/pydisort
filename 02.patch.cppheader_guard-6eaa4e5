@@ -1,0 +1,45 @@
+diff --git a/src/cdisort/cdisort.h b/src/cdisort/cdisort.h
+index 94a73f1..030c904 100644
+--- a/src/cdisort/cdisort.h
++++ b/src/cdisort/cdisort.h
+@@ -24,6 +24,10 @@
+ #ifndef __cdisort_h
+ #define __cdisort_h
+ 
++#ifdef __cplusplus
++extern "C" {
++#endif 
++
+ #include <stdio.h>
+ #include <stdlib.h>
+ #include <errno.h>
+@@ -1299,3 +1303,7 @@ void disort_test14(void);
+ /* * * * * * * * * * * * * * * * * * * * * * * end of cdisort.h * * * * * * * * * * * * * * * * * * */
+ 
+ #endif
++
++#ifdef __cplusplus
++} /* extern "C" */
++#endif 
+\ No newline at end of file
+diff --git a/src/cdisort/locate.h b/src/cdisort/locate.h
+index f6d9599..41e1fef 100644
+--- a/src/cdisort/locate.h
++++ b/src/cdisort/locate.h
+@@ -26,14 +26,14 @@
+ #ifndef __locate_disort_h
+ #define __locate_disort_h
+ 
+-#if defined (__cplusplus)
++#ifdef __cplusplus
+ extern "C" {
+ #endif
+ 
+ int locate_disort (double *xx, int n, double x);
+ int flocate_disort (float *xx, int n, float x);
+ 
+-#if defined (__cplusplus)
++#ifdef __cplusplus
+ }
+ #endif
+ 
