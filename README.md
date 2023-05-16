@@ -52,7 +52,6 @@ The main differences between the CMake-built version and the Makefile-built vers
 ## Build
 
 ```bash
-rm -rf build
 mkdir build
 cd build
 cmake ..
