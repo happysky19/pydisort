@@ -49,6 +49,15 @@ The main differences between the CMake-built version and the Makefile-built vers
 6. Unit testing: The CMake-built version includes a separate CMakeLists.txt file for unit testing, while the Makefile-built version does not.
 
 
+## Apply patches
+To apply patches, just use the command below.
+```bash
+git apply 01.patch.CLI_disort-018479a 
+git apply 02.patch.cppheader_guard-6eaa4e5
+```
+The code after `-` in the name of the patches stand for the commit in the `cppdisort` branch. For new updates from the `cdisort` project, we could fetch the new version and then apply the patches one by one.
+
+
 ## Build
 
 ```bash
