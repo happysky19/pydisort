@@ -1,0 +1,18 @@
+diff --git a/src/cdisort/cdisort.h b/src/cdisort/cdisort.h
+index 50ea987..c925402 100644
+--- a/src/cdisort/cdisort.h
++++ b/src/cdisort/cdisort.h
+@@ -1298,4 +1298,13 @@ void disort_test14(void);
+ 
+ /* * * * * * * * * * * * * * * * * * * * * * * end of cdisort.h * * * * * * * * * * * * * * * * * * */
+ 
++#undef DEG
++#undef SQR
++#undef MIN
++#undef MAX
++#undef LIMIT_RANGE
++#undef IMIN
++#undef IMAX
++#undef F77_SIGN
++
+ #endif
