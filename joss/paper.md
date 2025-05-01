@@ -58,14 +58,14 @@ The former is useful for users who want to use the package in `Python` and take 
 The function calls make frequent use of `Python` features such as keyword arguments and named arguments, which are idiomatic to `Python` users.
 
 ``Pydisort`` is designed to be used by both planetary and earth science researchers and by educators or students in radiative transfer courses.
-The previous effort of educational purpose has been made by [@ho2024pythonicdisort], which is a pure `Python` implementation of the DISORT algorithm and [@richardson2023radiative] which is a `Fortran77` implementation.
+The previous effort of educational purpose has been made by [@ho2024pythonicdisort], which is a pure `Python` implementation of the DISORT algorithm and [@ricchiazzi1998sbdart] which is a `Fortran77` implementation.
 Since our backend subroutines are implemented in `C`, our code runs as fast as the original `Fortran` implementation, while the `Python` interface lowers the barrier to entry for users who are not familiar with `Fortran` or `C`.
 
 
 Additionally, ``Pydisort`` improves upon the previous implementations by enabling parallelization over wavelengths and columns. For plane-parallel atmospheres, the radiative transfer equation is separable by columns and by wavelengths/wavenumbers.
 However, looping over columns and wavelengths in python will significantly slow down the code.
 Therefore, we leverage the `Pytorch` tensor data structure and its ``TensorIterator`` functionality to enable parallelization over columns and wavelengths.
-Future improvements of the package will allow GPU acceleration of the
+Future improvements of the package will seamlessly allow GPU acceleration of the
 radiative transfer calculation when the original `C` backend is adapted to execute on GPUs.
 
 # Acknowledgements
