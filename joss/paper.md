@@ -45,19 +45,24 @@ but is lesser known in the atmospheric science community than the original `Fort
 
 Our `Pydisort` package differs from the previous `pydisort` packages in the following ways:
 
-- We use the `C` implementation of DISORT as the backend, which allows for dynamic memory allocation during runtime.
-- We use `Pytorch` [@paszke2019pytorch]'s ``tensor`` data structure for memory management, which paves the road for heterogeneous computing and automatic parallelization.
-- We design software architecture to support building the C/C++ backend libraries as shared libraries, linking them to the `Python` interface, and distributing them as `pip`-installable packages for various platforms, including `Linux` and `MacOS`.
-- Two frontends are provided: (1) a `Python` interface and (2) a `C++` interface.
+1. We use the `C` implementation of DISORT as the backend, which allows for dynamic memory allocation during runtime.
+2. We use `Pytorch` [@paszke2019pytorch]'s ``tensor`` data structure for memory management, which paves the road for heterogeneous computing and automatic parallelization.
+3. We create an intermediate `C++` interface to the backend `C`-library, which handles pre- and post-processing of the raw `cdisort` data structures.
+4. We leverage `Pybind11` [@jakob2024pybind11] to interface between `Python` and our intermediate `C++` interface.
+`Pybind11` is a header-only modern alternative to `f2py` with graceful type-handling and memory management.
+5. We design software architecture to support building the C/C++ backend libraries as shared libraries, linking them to `libtorch` and the `Python` interface, and distributing them as `pip`-installable packages for various platforms, including `Linux` and `MacOS`.
+6. We provide two frontends: (1) a `Python` interface and (2) a `C++` interface.
 The former is useful for users who want to use the package in `Python` and take advantage of the machine learning capabilities enabled by `Pytorch`, while the latter is useful for users who want to integrate the package into their own `C/C++` packages.
-- We automate the Continuous Integration (CI) and Continuous Distribution (CD) processes using `GitHub Actions` to ensure that minimal human maintenance is required for the package.
-
+7. We automate the Continuous Integration (CI) and Continuous Distribution (CD) processes using `GitHub Actions` to ensure that minimal human effort is required for maintaining the package.
+8. We adhere to the `PEP 8` [@van2001pep] style guide for `Python` code, making the program a `Python-first` experience.
+The function calls make frequent use of `Python` features such as keyword arguments and named arguments, which are idiomatic to `Python` users.
 
 ``Pydisort`` is designed to be used by both planetary and earth science researchers and by educators or students in radiative transfer courses.
-Since the backend subroutines are implemented in `C`, the code runs as fast as the original `Fortran` implementation, while the `Python` interface lowers the barrier to entry for users who are not familiar with `Fortran` or `C`.
+The previous effort of educational purpose has been made by [@ho2024pythonicdisort], which is a pure `Python` implementation of the DISORT algorithm and [@richardson2023radiative] which is a `Fortran77` implementation.
+Since our backend subroutines are implemented in `C`, our code runs as fast as the original `Fortran` implementation, while the `Python` interface lowers the barrier to entry for users who are not familiar with `Fortran` or `C`.
 
 
-``Pydisort`` improves upon the previous implementations by enabling parallelization over wavelengths and columns. For plane-parallel atmospheres, the radiative transfer equation is separable by columns and by wavelengths/wavenumbers.
+Additionally, ``Pydisort`` improves upon the previous implementations by enabling parallelization over wavelengths and columns. For plane-parallel atmospheres, the radiative transfer equation is separable by columns and by wavelengths/wavenumbers.
 However, looping over columns and wavelengths in python will significantly slow down the code.
 Therefore, we leverage the `Pytorch` tensor data structure and its ``TensorIterator`` functionality to enable parallelization over columns and wavelengths.
 Future improvements of the package will allow GPU acceleration of the
