@@ -29,7 +29,7 @@ Despite of this limitation, the original `Fortran` program has been widely used 
 With the increasing adoption of `Python` in scientific computing, over the years, many efforts have been made to wrap the original `Fortran` code in `Python` to provide a more user-friendly interface.
 Notable examples include (1) [chanGimeno's](https://github.com/chanGimeno/pyDISORT),
 (2) [SeregaOsipov's](https://github.com/SeregaOsipov/pyDISORT),
-(3) [danielkoll's](https://github.com/danielkoll/PyDISORT3), and
+(3) [danielkoll's](https://github.com/danielkoll/PyDISORT3) [@koll2019hot], and
 (4) [mjwolf's](https://github.com/mjwolff/pyDISORT).
 All of them are named ``pydisort`` and are based on the original `Fortran` code.
 Their `Python` interfaces are enabled by `f2py` [@van2011numpy] functionality, which is a part of the `NumPy` package and provides a convenient way to call `Fortran` subroutines from `Python`.
