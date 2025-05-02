@@ -31,7 +31,7 @@ Notable examples include (1) [chanGimeno's](https://github.com/chanGimeno/pyDISO
 (2) [SeregaOsipov's](https://github.com/SeregaOsipov/pyDISORT),
 (3) [danielkoll's](https://github.com/danielkoll/PyDISORT3) [@koll2019hot], and
 (4) [mjwolf's](https://github.com/mjwolff/pyDISORT).
-All of them are named ``pydisort`` and are based on the original `Fortran` code.
+All of them are named `pydisort` and are based on the original `Fortran` code.
 Their `Python` interfaces are enabled by `f2py` [@van2011numpy] functionality, which is a part of the `NumPy` package and provides a convenient way to call `Fortran` subroutines from `Python`.
 
 Independently, @ho2024pythonicdisort developed a pure `Python` implementation of the DISORT algorithm, which is less efficient than the `Fortran` implementation but is easier to use for pedagogical and exploratory purposes.
@@ -51,9 +51,9 @@ Our `Pydisort` package differs from the previous `pydisort` packages in the foll
 4. We leverage `Pybind11` [@jakob2024pybind11] to interface between `Python` API calls and our intermediate `C++` interface.
 `Pybind11` is a header-only modern alternative to `f2py` with graceful type-handling, casting and memory management.
 5. We design software architecture to support building the C/C++ backend libraries as shared libraries, linking them to `libtorch` and `Python`, and distributing them as `pip`-installable packages for various platforms, including `Linux` and `MacOS`.
-6. We automate the building and distribution process using `cibuildwheel` on Mac images and linux images with `glibc 2.28+`, which is the minimum version of `glibc` required by `PyTorch v2.7+`.
+6. We automate the building and distribution process using `cibuildwheel` on Mac images and Linux images with `glibc 2.28+`, which is the minimum version of `glibc` required by `PyTorch v2.7+`.
 7. We dynamically determine the `CXX11_ABI` version from the upstream `libtorch`
-library. Currently with `libtorch v2.7`, the `CXX11_ABI` version is `1` for linux distributions and `0` for MacOS distributions.
+library. Currently with `libtorch v2.7`, the `CXX11_ABI` version is `1` for Linux distributions and `0` for MacOS distributions.
 8. We provide two frontends: (1) a `Python` interface and (2) a `C++` interface.
 The former is useful for users who want to use the package in `Python` and take advantage of the machine learning capabilities enabled by `PyTorch`, while the latter is useful for users who want to integrate the package into their own `C/C++` packages.
 9. We automate the Continuous Integration (CI) and Continuous Distribution (CD) processes using `GitHub Actions` to ensure that minimal human effort is required for maintaining the package.
@@ -66,9 +66,9 @@ The function calls make frequent use of `Python` features such as keyword argume
 Tools for calculating atmospheric radiative transfer are essential for a wide range of applications in atmospheric modeling and remote sensing.
 As demonstrated in the [Summary](#Summary) section, the original `Fortran` implementation of DISORT has been widely used in research.
 To accommodate the growing popularity of `Python` in the scientific community, many groups have developed their own Python wrappers
-for the original Fortran implementation of DISORT. However, few have achieved the same level of maturity, efficiency, and usability as our package.
+for the original Fortran implementation of DISORT. However, few have reached the same level of maturity, efficiency, and usability as our package.
 
-Our package is the first `pip`-installable package that wraps the DISORT algorithm
+Our package manages to distribute `pip`-installable pre-built library that wraps the DISORT algorithm
 implemented in a lower-level compiled language such as `C` or `Fortran`.
 Our package
 
