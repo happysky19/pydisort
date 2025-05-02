@@ -33,6 +33,7 @@ Notable examples include (1) [chanGimeno's](https://github.com/chanGimeno/pyDISO
 (4) [mjwolf's](https://github.com/mjwolff/pyDISORT).
 All of them are named `pydisort` and are based on the original `Fortran` code.
 Their `Python` interfaces are enabled by `f2py` [@van2011numpy] functionality, which is a part of the `NumPy` package and provides a convenient way to call `Fortran` subroutines from `Python`.
+A specific implementation of `pydisort` for near-IR radiative transfer in Titan's atmosphere is provided through the [atmosphere](https://github.com/adamkovics/atmosphere) package by @adamkovics2016meridional.
 
 Independently, @ho2024pythonicdisort developed a pure `Python` implementation of the DISORT algorithm, which is less efficient than the `Fortran` implementation but is easier to use for pedagogical and exploratory purposes.
 
