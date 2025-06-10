@@ -63,6 +63,23 @@ The previous effort of educational purpose has been made by @ho2024pythonicdisor
 
 Additionally, `Pydisort` improves upon the `C/Fortran` implementations by enabling parallelization over wavelengths and columns. For plane-parallel atmospheres, the radiative transfer equation is separable by columns and by wavelengths/wavenumbers. However, looping over columns and wavelengths in `Python` will significantly slow down the code. Therefore, we leverage the `PyTorch` tensor data structure and its `TensorIterator` functionality to enable concurrent execution over columns and wavelengths. Future improvements of the package will seamlessly allow GPU acceleration of the radiative transfer calculation when the original `C` backend is adapted to execute on GPUs.
 
+# Performance Evaluation
+
+To quantify the efficiency of `Pydisort` relative to existing implementations, we benchmarked runtimes using a test driver based on Test Problem 9 (“General Emitting/Absorbing/Scattering”) from the DISORT suite (`diotest`), with increased computational workload. Specifically, the benchmark configuration includes 32 streams and 100 atmospheric layers, typical for atmospheric radiation calculations; all other parameters are kept consistent with the original test case. We increase the workload by solving the radiative transfer equations repetitively for multiple wavelengths or columns, representing a realistic application case in remote sensing and atmospheric modeling such that multiple spectral bands or atmospheric columns are processed simultaneously.
+
+We evaluated `Pydisort` performance against two alternative implementations:
+
+- **`cdisort`**: the original C reimplementation of DISORT, which serves as our baseline performance reference,
+- **`PythonicDISORT`**: a pure-Python translation of DISORT, used to highlight the performance gap between interpreted and optimized implementations.
+
+To assess parallel performance, we ran `Pydisort` in both single-threaded and multi-threaded modes using `PyTorch`'s internal parallelism configuration (`torch.set_num_threads`). Multi-threaded tests were conducted with 10 threads to illustrate scalability on modern CPU architectures. All tests were conducted on a MacBook Pro equipped with an Apple M1 Max chip (10-core CPU, peak clock speed of 3.22 GHz) and 64 GB of RAM.
+
+![Figure 1. Runtime comparison of radiative transfer implementations as a function of the number of wavenumbers, evaluated on a fixed test problem (DISORT Test 09 with 32 streams and 100 layers). `cdisort` (gray) serves as the baseline C implementation. `PythonicDisort` (red) is a pure-Python reimplementation. `Pydisort` is shown in both single-threaded (blue, 1 core) and multi-threaded (green, 10 cores) modes, using PyTorch-based parallelism. Both axes use logarithmic scaling. The results demonstrate that `Pydisort` outperforms `cdisort` in runtime efficiency and exhibits effective parallel scaling with increasing spectral resolution.](Figure1.png)
+
+We did not benchmark the original Fortran DISORT implementation, as prior work by @buras2011new has demonstrated that the C version (`cdisort`) provides better runtime performance and is commonly used in research settings as part of the `libRadtran` package [@emde2016libradtran].
+
+Figure 1 summarizes the results, showing runtime as a function of the number of wavenumbers. Both axes use logarithmic scaling to highlight relative performance trends across a wide range of spectral resolutions. As shown, `Pydisort` is at least as efficient as `cdisort` when using a single core, and outperforms `cdisort` in multi-threaded mode by an order of magnitude when the workload increases, demonstrating the effectiveness of PyTorch's parallelism for this problem. The pure-Python implementation (`PythonicDISORT`) is significantly slower, highlighting the performance benefits of using a compiled backend. Additionally, `Pydisort` shows effective parallel scaling, demonstrating its suitability for high-throughput radiative transfer workloads.
+
 # Acknowledgements
 
 We acknowledge Dr. Timothy E. Dowling for his work on migrating the original FORTRAN version of DISORT to C, which is the basis for our implementation. We acknowledge Dr. Xi Zhang and Dr. Tianhao Le for initiating the project and testing the code. We also thank Andrew Ryan for early testing and feedback on the package.
