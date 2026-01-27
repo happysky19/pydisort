@@ -34,18 +34,23 @@ The `cdisort` library, while powerful, remains a single-threaded, low-level impl
 
 To provide the radiative transfer community with a truly modern, high-performance, and user-friendly solution, we developed `Pydisort`, a `pip`-installable, compile-free Python package that wraps the `cdisort` library with support for parallel processing and compatibility with machine learning frameworks via `PyTorch`. `Pydisort` is designed for ease of use, efficiency, and flexibility, enabling users to perform radiative transfer calculations in a plane-parallel atmosphere with minimal effort. It supports batch processing, allowing efficient computation of radiative properties across multiple atmospheric layers and wavelengths in a single invocation.
 
-Specifically, `Pydisort` provides the following features:
+# Software Design
 
-1. We use the `cdisort` library as the backend, which allows for dynamic memory allocation during runtime.
-2. We use `PyTorch` [@paszke2019pytorch]'s `tensor` data structure for memory management, paving the way for heterogeneous computing and automatic parallelization.
-3. We create an intermediate `C++` layer to the backend `C`-library. The intermediate layer handles pre- and post-processing of the raw `cdisort` data structures, eliminating the need to feed long parameter lists to the backend library.
-4. We leverage `Pybind11` [@jakob2024pybind11] to interface between `Python` API calls and our intermediate `C++` interface. `Pybind11` is a header-only modern alternative to `f2py` with graceful type-handling, casting and memory management.
-5. We design software architecture to support building the C/C++ backend libraries as shared libraries, linking them to `libtorch` and `Python`, and distributing them as a `pip`-installable PyPI package [`pydisort`](https://pypi.org/project/pydisort/) for various platforms, including `Linux` and `MacOS`.
-6. We automate the building and distribution process using `cibuildwheel` on Mac images and Linux images with `glibc 2.28+`, which is the minimum version of `glibc` required by `PyTorch v2.7+`.
-7. We dynamically determine the `CXX11_ABI` version from the upstream `libtorch` library. Currently with `libtorch v2.7`, the `CXX11_ABI` version is `1` for Linux distributions and `0` for MacOS distributions.
-8. We provide two frontends: (1) a `Python` interface and (2) a `C++` interface. The former is useful for users who want to use the package in `Python` and take advantage of the machine learning capabilities enabled by `PyTorch`, while the latter is useful for users who want to integrate the package into their own `C/C++` packages.
-9. We automate the Continuous Integration (CI) and Continuous Distribution (CD) processes using `GitHub Actions` to ensure that minimal human effort is required for developers contributing to and maintaining the package.
-10. We adhere to the `PEP 8` [@van2001pep] style guide for `Python` code, making the program a `Python-first` experience. The function calls make frequent use of `Python` features such as keyword arguments and named arguments, which are idiomatic to `Python` users.
+`Pydisort` is designed as a modular, layered software system that bridges a high-performance radiative transfer backend with modern, Python-centric scientific workflows. The core numerical solver is provided by the `cdisort` library, which serves as the computational backend and supports dynamic memory allocation at runtime. This choice enables flexible problem sizes while retaining the numerical robustness of the established DISORT implementation.
+
+To facilitate efficient memory management and future-proof the codebase for heterogeneous computing, `Pydisort` adopts PyTorch [@paszke2019pytorch] tensors as its primary data structure at the user interface level. Using tensors allows seamless integration with PyTorch’s automatic parallelization, GPU acceleration, and machine-learning ecosystem, while maintaining compatibility with CPU-only environments.
+
+An intermediate C++ layer is introduced between the Python interface and the C backend. This layer encapsulates the raw `cdisort` data structures and is responsible for pre-processing inputs and post-processing outputs. By centralizing this logic, the design avoids exposing users to long, error-prone parameter lists and isolates backend-specific details from the public API. This intermediate layer also enables reuse of the backend functionality in non-Python contexts.
+
+The Python bindings are implemented using `pybind11` [@jakob2024pybind11], a modern, header-only C++ library that provides robust type conversion, memory ownership semantics, and exception handling. Compared to traditional approaches such as `f2py`, `pybind11` offers greater flexibility and maintainability for mixed C++/Python codebases.
+
+The build system is designed to produce shared C and C++ libraries that link against both `libtorch` and Python, allowing the package to be distributed as a standard `pip`-installable PyPI package ([`pydisort`](https://pypi.org/project/pydisort/)). Prebuilt binary wheels are provided for Linux and macOS platforms. The build and distribution process is fully automated using `cibuildwheel`, targeting Linux systems with `glibc` version 2.28 or newer, which is the minimum required by PyTorch v2.7 and later.
+
+To ensure ABI compatibility with upstream PyTorch binaries, the build system dynamically determines the appropriate `CXX11_ABI` setting from the linked `libtorch` distribution. For `libtorch` v2.7, this corresponds to `CXX11_ABI=1` on Linux and `CXX11_ABI=0` on macOS.
+
+`Pydisort` provides two user-facing interfaces: a Python API and a C++ API. The Python interface is intended for interactive use, scripting, and integration with machine-learning workflows, while the C++ interface supports embedding `Pydisort` directly into larger C or C++ simulation frameworks.
+
+Continuous integration (CI) and continuous distribution (CD) are handled through GitHub Actions, enabling automated testing, building, and release of binary wheels with minimal manual intervention. The Python codebase follows the PEP 8 style guide [@van2001pep] and adopts a Python-first design philosophy, making extensive use of keyword arguments and named parameters to provide a clear, idiomatic user experience.
 
 # Statement of need
 
@@ -80,8 +85,14 @@ We did not benchmark the original Fortran DISORT implementation, as prior work b
 
 Figure 1 summarizes the results, showing runtime as a function of the number of wavenumbers. Both axes use logarithmic scaling to highlight relative performance trends across a wide range of spectral resolutions. As shown, `Pydisort` is at least as efficient as `cdisort` when using a single core, and outperforms `cdisort` in multi-threaded mode by an order of magnitude when the workload increases, demonstrating the effectiveness of `PyTorch`'s parallelism for this problem. The pure-Python implementation (`PythonicDISORT`) is significantly slower, highlighting the performance benefits of using a compiled backend. Additionally, `Pydisort` shows strong scaling performance, demonstrating its suitability for high-throughput radiative transfer workloads.
 
+# Research impact statement
+
 # Acknowledgements
 
 We acknowledge Dr. Timothy E. Dowling for his work on migrating the original FORTRAN version of DISORT to C, which is the basis for our implementation. We acknowledge Dr. Xi Zhang and Dr. Tianhao Le for initiating the project and testing the code. We also thank Andrew Ryan for early testing and feedback on the package.
+
+# AI usage disclosure
+
+No generative AI tools were used in the development of this software, the writing of this manuscript, or the preparation of supporting materials.
 
 # References
