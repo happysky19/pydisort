@@ -79,19 +79,31 @@ We evaluated `Pydisort` performance against two alternative implementations:
 
 To assess parallel performance, we ran `Pydisort` in both single-threaded and multi-threaded modes using `PyTorch`'s internal parallelism configuration (`torch.set_num_threads`). Multi-threaded tests were conducted with 10 threads to illustrate scalability on modern CPU architectures. All tests were conducted on a MacBook Pro equipped with an Apple M1 Max chip (10-core CPU, peak clock speed of 3.22 GHz) and 64 GB of RAM.
 
-![Runtime comparison of radiative transfer implementations as a function of the number of wavenumbers, evaluated on a fixed test problem (DISORT Test 09 with 32 streams and 100 layers). `cdisort` (gray) serves as the baseline C implementation. `PythonicDisort` (red) is a pure-Python reimplementation. `Pydisort` is shown in both single-threaded (blue, 1 core) and multi-threaded (green, 10 cores) modes, using `PyTorch`-based parallelism. Both axes use logarithmic scaling. The results demonstrate that `Pydisort` outperforms `cdisort` in runtime efficiency and exhibits strong scaling performance with increasing spectral resolution.](Figure_1.png)
+![Runtime comparison of radiative transfer implementations as a function of the number of wavenumbers, evaluated on a fixed test problem (DISORT Test 09 with 32 streams and 100 layers). `cdisort` (gray) serves as the baseline C implementation. `PythonicDisort` (red) is a pure-Python reimplementation. `Pydisort` is shown in both single-threaded (blue, 1 core) and multi-threaded (green, 10 cores) modes, using `PyTorch`-based parallelism. Both axes use logarithmic scaling. The results demonstrate that `Pydisort` outperforms `cdisort` in runtime efficiency and exhibits strong scaling performance with increasing spectral resolution.](perf.png)
 
 We did not benchmark the original Fortran DISORT implementation, as prior work by @buras2011new has demonstrated that the C version (`cdisort`) provides better runtime performance and is commonly used in research settings as part of the `libRadtran` package [@emde2016libradtran].
 
 Figure 1 summarizes the results, showing runtime as a function of the number of wavenumbers. Both axes use logarithmic scaling to highlight relative performance trends across a wide range of spectral resolutions. As shown, `Pydisort` is at least as efficient as `cdisort` when using a single core, and outperforms `cdisort` in multi-threaded mode by an order of magnitude when the workload increases, demonstrating the effectiveness of `PyTorch`'s parallelism for this problem. The pure-Python implementation (`PythonicDISORT`) is significantly slower, highlighting the performance benefits of using a compiled backend. Additionally, `Pydisort` shows strong scaling performance, demonstrating its suitability for high-throughput radiative transfer workloads.
 
-# Research impact statement
+# Research Impact Statement
+
+`Pydisort` solves the radiative transfer equation in an efficient and user-friendly manner, addressing a long-standing need in atmospheric science, climate modeling, and planetary science for a modern, high-performance DISORT-based tool. It has been adopted as a core computation component within a growing ecosystem of research projects, supporting studies that span terrestrial atmospheres, giant planets, exoplanets, finite volum models for compressible fluids, coupled chemistry-thermodynamics frameworks, and physically based rendering in vision and imaging applications. It's currently used in dozens of GitHub repositories across multiple institutions, for both research and educational purposes.
+
+The ability to deploy `Pydisort` in high-performance computing environments, including GPU-accelerated systems, enables large-scale simulations and high-throughput data analysis that were previously difficult to achieve with traditional DISORT implementations. Its native compatibility with machine-learning frameworks like `PyTorch` enables researchers to integrate radiative transfer calculations into data-driven models. Adoption metrics further demonstrates `Pydisort`'s impact. The PyPI public dataset shows a marked increase in downloads following the introduction of GPU acceleration in March 2025.
+
+![The PyPI download statistics show an increasing trend in adoption following the introduction of GPU acceleration, indicating growing interest from the community. Charts generated via ClickPy.](pydisort_stats.png)
+
+As of January 2026, `Pydisort` has been downloaded over 192,000 times since its initial release in 2023, placing it within the top 10% of all Python packages by download counts. The user base spans over 140 countries, reflecting its global reach and impact.
+
+![Geographical distribution of `Pydisort` downloads, indicating a global user base with significant adoption in North America, Europe, and Asia. Chart generated via ClickPy.](pypi_by_country.png)
+
+Together, these trends reflect the growing recognition of `Pydisort` as a reliable, scalable, and versatile tool for radiative transfer calculations that lowers technical barriers while enabling new classes of scientific inquiry.
 
 # Acknowledgements
 
 We acknowledge Dr. Timothy E. Dowling for his work on migrating the original FORTRAN version of DISORT to C, which is the basis for our implementation. We acknowledge Dr. Xi Zhang and Dr. Tianhao Le for initiating the project and testing the code. We also thank Andrew Ryan for early testing and feedback on the package.
 
-# AI usage disclosure
+# AI Usage Disclosure
 
 No generative AI tools were used in the development of this software, the writing of this manuscript, or the preparation of supporting materials.
 
