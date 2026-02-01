@@ -30,7 +30,7 @@ The Discrete Ordinates Radiative Transfer (DISORT) algorithm is one of the most 
 
 # Statement of Need
 
-Radiative transfer models based on DISORT are essential tools in atmospheric science, climate modeling, remote sensing, and planetary physics. The original DISORT implementation, written in Fortra [@stamnes1988numerically], has been widely adopted and validated across decades of Earth and planetary studies [@clough2005atmospheric; @li2018high; @tan2021atmospheric; @komacek2022patchy; @lee2024testing; @zhang2015aerosol]. However, this implementation relies on static memory allocation, requiring users to specify the number of atmospheric layers and radiation streams at compile time, which limits flexibility and complicates modern workflows.
+Radiative transfer models based on DISORT are essential tools in atmospheric science, climate modeling, remote sensing, and planetary physics. The original DISORT implementation, written in Fortran [@stamnes1988numerically], has been widely adopted and validated across decades of Earth and planetary studies [@clough2005atmospheric; @li2018high; @tan2021atmospheric; @komacek2022patchy; @lee2024testing; @zhang2015aerosol]. However, this implementation relies on static memory allocation, requiring users to specify the number of atmospheric layers and radiation streams at compile time, which limits flexibility and complicates modern workflows.
 
 To address usability concerns, several Python wrappers around the original Fortran DISORT have been developed using tools such as `f2py` (e.g., pyDISORT variants by [chanGimeno](https://github.com/chanGimeno/pyDISORT), [SeregaOsipov](https://github.com/SeregaOsipov/pyDISORT), [danielkoll](https://github.com/danielkoll/PyDISORT3), and [mjwolff](https://github.com/mjwolff/pyDISORT)). While these efforts improve accessibility, they inherit the underlying static-memory constraints and impose nontrivial build and compilation requirements. An alternative approach is a pure-Python reimplementation of DISORT [@ho2024pythonicdisort], which removes compilation barriers but sacrifices computational performance, making it unsuitable for large-scale or high-throughput applications.
 
@@ -38,7 +38,7 @@ To address usability concerns, several Python wrappers around the original Fortr
 
 1. eliminates the need for users to configure complex build environments or toolchains;
 2. avoids local compilation by distributing prebuilt shared libraries via PyPI;
-3. achieves performance comparable to or exceeding existing C/Fortran implementations on the same hardware, with a clear path toward GPU acceleration;
+3. achieves performance exceeding existing C/Fortran implementations on modern devices, with a clear path toward GPU acceleration;
 4. exposes a modern, idiomatic Python interface suitable for interactive use and scripting;
 5. integrates naturally with `PyTorch`-based scientific and machine-learning workflows.
 
@@ -101,7 +101,7 @@ Together, these trends reflect the growing recognition of `Pydisort` as a reliab
 
 # Acknowledgements
 
-We acknowledge Dr. Timothy E. Dowling for his work on migrating the original FORTRAN version of DISORT to C, which is the basis for our implementation. We acknowledge Dr. Xi Zhang and Dr. Tianhao Le for initiating the project and testing the code. We also thank Andrew Ryan for early testing and feedback on the package.
+We acknowledge Dr. Timothy E. Dowling for his work on migrating the original FORTRAN version of DISORT to C, which is the basis for our implementation. We acknowledge Dr. Xi Zhang and Dr. Tianhao Le for initiating the project and testing the code. We also thank Dr. Andrew Ryan for early testing and feedback on the package.
 
 # AI Usage Disclosure
 
