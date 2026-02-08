@@ -105,6 +105,6 @@ We acknowledge Dr. Timothy E. Dowling for his work on migrating the original FOR
 
 # AI Usage Disclosure
 
-Generative AI tools were used in a limited and well-defined manner during the development of the Pydisort software and its documentation. Specifically, several pull requests were AI-assisted, primarily using GitHub Copilot, to help generate or refactor test cases, update Python type stubs, and improve documentation clarity. All AI-assisted contributions were reviewed, edited, and validated by human authors prior to merging. For all other parts of the software and this paper, no generative AI tools were used, and all authors take responsibility for the final content.
+GitHub Copilot contributed to several pull requests by assisting with the generation or refactoring of test cases, updating Python type stubs, and improving documentation clarity. All AI-assisted contributions were reviewed, edited, and validated by human authors prior to merging. For all other parts of the software and this paper, no generative AI tools were used, and all authors take responsibility for the final content.
 
 # References
