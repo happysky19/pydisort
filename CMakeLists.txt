@@ -92,7 +92,7 @@ else()
 endif()
 
 if (CUDAToolkit_FOUND)
-  set(CMAKE_CUDA_ARCHITECTURES 61 86 89)
+  set(CMAKE_CUDA_ARCHITECTURES 61 86 89 120)
   set(CMAKE_CUDA_STANDARD 17)
 endif()
 
