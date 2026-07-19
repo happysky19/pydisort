@@ -5,7 +5,7 @@
 #include <ATen/native/DispatchStub.h>
 
 // disort
-#include <cdisort213/cdisort.h>
+#include <cdisort213/cdisort.hpp>
 
 namespace at::native {
 

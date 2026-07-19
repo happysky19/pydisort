@@ -1,7 +1,7 @@
 #pragma once
 
 // disort
-#include <cdisort213/cdisort.h>
+#include <cdisort213/cdisort.hpp>
 #include <disort/index.h>
 
 #define FLX(i, m) flx[(i) * 2 + (m)]
@@ -20,7 +20,7 @@
 namespace disort {
 
 template <typename T>
-void disort_impl(T *flx, T *prop, T *umu0, T *phi0, T *fbeam, T *albedo,
+DISPATCH_MACRO void disort_impl(T *flx, T *prop, T *umu0, T *phi0, T *fbeam, T *albedo,
                  T *fluor, T *fisot, T *temis, T *btemp, T *ttemp, T *temf,
                  int upward, disort_state &ds, disort_output &ds_out,
                  int nprop) {

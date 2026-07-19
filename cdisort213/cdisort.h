@@ -24,10 +24,12 @@
 #ifndef __cdisort_h
 #define __cdisort_h
 
+#ifndef DISPATCH_MACRO
 #ifdef __CUDACC__
 #define DISPATCH_MACRO __host__ __device__
 #else
 #define DISPATCH_MACRO
+#endif
 #endif
 
 #ifdef __cplusplus
@@ -498,35 +500,31 @@ typedef struct {
 
 #define DEG (M_PI/180.)
 
-#define SQR(x) ({ \
-          const double _x = (double)(x); \
-          _x*_x; })
+/* These were GNU statement-expression macros; the inline functions below
+ * are exact equivalents (same argument conversions, single evaluation)
+ * and are portable to device code. */
+#undef SQR
+#undef MIN
+#undef MAX
+#undef LIMIT_RANGE
 
-#define MIN(x,y) ({ \
-         const double _x = (double)(x); \
-         const double _y = (double)(y); \
-         _x < _y ? _x : _y; })
+DISPATCH_MACRO inline double SQR(double _x) {
+  return _x*_x; }
 
-#define MAX(x,y) ({ \
-         const double _x = (double)(x); \
-         const double _y = (double)(y); \
-         _x > _y ? _x : _y; })
+DISPATCH_MACRO inline double MIN(double _x, double _y) {
+  return _x < _y ? _x : _y; }
 
-#define LIMIT_RANGE(min,x,max) ({ \
-         const double _min = (double)(min); \
-         const double _x   = (double)(x);   \
-         const double _max = (double)(max); \
-         _x < _min ? _min : ( _x > _max ? _max : _x ); })
+DISPATCH_MACRO inline double MAX(double _x, double _y) {
+  return _x > _y ? _x : _y; }
 
-#define IMIN(i,j) ({ \
-         const int _i = (int)(i); \
-         const int _j = (int)(j); \
-         _i < _j ? _i : _j; })
+DISPATCH_MACRO inline double LIMIT_RANGE(double _min, double _x, double _max) {
+  return _x < _min ? _min : ( _x > _max ? _max : _x ); }
 
-#define IMAX(i,j) ({ \
-         const int _i = (int)(i); \
-         const int _j = (int)(j); \
-         _i > _j ? _i : _j; })
+DISPATCH_MACRO inline int IMIN(int _i, int _j) {
+  return _i < _j ? _i : _j; }
+
+DISPATCH_MACRO inline int IMAX(int _i, int _j) {
+  return _i > _j ? _i : _j; }
 
 #define F77_SIGN(a,b) ((b) >= 0. ? fabs(a) : -fabs(a))
 
@@ -546,10 +544,12 @@ double c_planck_func2(double wnumlo,
 
 typedef double(*emission_func_t)(double, double, double);
 
+DISPATCH_MACRO
 int c_disort(disort_state  *ds,
               disort_output *out,
               emission_func_t emi_func);
 
+DISPATCH_MACRO
 double c_bidir_reflectivity ( double       wvnmlo,
 			      double       wvnmhi,
 			      double       mu,
@@ -559,18 +559,21 @@ double c_bidir_reflectivity ( double       wvnmlo,
 			      disort_brdf *brdf,
 			      int          callnum );
 
+DISPATCH_MACRO
 double c_bidir_reflectivity_hapke ( double wvnmlo,
 				    double wvnmhi,
 				    double mu,
 				    double mup,
 				    double dphi );
 
+DISPATCH_MACRO
 double c_bidir_reflectivity_rpv ( rpv_brdf_spec *brdf,
 				  double         mu1,
 				  double         mu2,
 				  double         phi,
 				  double         badmu );
 
+DISPATCH_MACRO
 double c_dref(double       wvnmlo,
               double       wvnmhi,
               double       mu,
@@ -578,11 +581,13 @@ double c_dref(double       wvnmlo,
 	      disort_brdf *brdf,
 	      int          callnum );
 
+DISPATCH_MACRO
 void c_getmom(int    iphas,
              double  gg,
              int     nmom,
              double *pmom);
 
+DISPATCH_MACRO
 void c_asymmetric_matrix(double *aa,
                          double *evec,
                          double *eval,
@@ -592,6 +597,7 @@ void c_asymmetric_matrix(double *aa,
                          int    *ier,
                          double *wk);
 
+DISPATCH_MACRO
 void c_intensity_components(disort_state *ds,
                             double       *gc,
                             double       *kk,
@@ -607,6 +613,7 @@ void c_intensity_components(disort_state *ds,
                             disort_pair  *plk,
                             double       *uum);
 
+DISPATCH_MACRO
 void c_fluxes(disort_state  *ds,
               disort_output *out,
               double        *ch,
@@ -631,6 +638,7 @@ void c_fluxes(disort_state  *ds,
               disort_pair   *fl,
               double        *u0c);
 
+DISPATCH_MACRO
 void c_intensity_correction(disort_state  *ds,
                             disort_output *out,
                             double         dither,
@@ -647,6 +655,7 @@ void c_intensity_correction(disort_state  *ds,
                             double        *taucpr,
                             double        *utaupr);
 
+DISPATCH_MACRO
 void c_new_intensity_correction(disort_state  *ds,
 				disort_output *out,
 				double         dither,
@@ -663,6 +672,7 @@ void c_new_intensity_correction(disort_state  *ds,
 				double        *taucpr,
 				double        *utaupr);
 
+DISPATCH_MACRO
 void prep_double_scat_integr (int           nphase,
 			      int           ntau,
 			      int           nf,
@@ -672,6 +682,7 @@ void prep_double_scat_integr (int           nphase,
 			      int          *neg_phas,
 			      double       *norm_phas);
 
+DISPATCH_MACRO
 double c_secondary_scat(disort_state *ds,
                         int           iu,
                         int           lu,
@@ -680,6 +691,7 @@ double c_secondary_scat(disort_state *ds,
                         int           layru,
                         double       *tauc);
 
+DISPATCH_MACRO
 double c_new_secondary_scat(disort_state *ds,
 			    int           iu,
 			    int           lu,
@@ -694,6 +706,7 @@ double c_new_secondary_scat(disort_state *ds,
 			    int          *neg_phas,
 			    double        norm_phas);
 
+DISPATCH_MACRO
 double calc_phase_squared (int           nphase,
 			   int           lu,
 			   double        ctheta,
@@ -704,6 +717,7 @@ double calc_phase_squared (int           nphase,
 			   int          *neg_phas,
 			   double        norm_phas);
 
+DISPATCH_MACRO
 void c_disort_set(disort_state *ds,
                   double       *ch,
                   double       *chtau,
@@ -725,6 +739,7 @@ void c_disort_set(disort_state *ds,
                   double       *utaupr,
                   emission_func_t emi_func);
 
+DISPATCH_MACRO
 void c_set_matrix(disort_state *ds,
                   double       *bdr,
                   double       *cband,
@@ -740,6 +755,7 @@ void c_set_matrix(disort_state *ds,
                   double       *taucpr,
                   double       *wk);
 
+DISPATCH_MACRO
 double c_single_scat(double   dither,
                      int      layru,
                      int      nlyr,
@@ -751,6 +767,7 @@ double c_single_scat(double   dither,
                      double   utau,
                      double   fbeam);
 
+DISPATCH_MACRO
 void c_solve_eigen(disort_state *ds,
                    int           lc,
                    disort_pair  *ab,
@@ -768,6 +785,7 @@ void c_solve_eigen(disort_state *ds,
                    double       *gc,
                    double       *wk);
 
+DISPATCH_MACRO
 void c_solve0(disort_state *ds,
               double       *b,
               double       *bdr,
@@ -793,6 +811,7 @@ void c_solve0(disort_state *ds,
               double       *zzg,
               disort_pair  *plk);
 
+DISPATCH_MACRO
 void c_surface_bidir(disort_state *ds,
                      double        delm0,
                      double       *cmu,
@@ -804,6 +823,7 @@ void c_surface_bidir(disort_state *ds,
                      double       *rmu,
 		     int           callnum);
 
+DISPATCH_MACRO
 void c_interp_eigenvec(disort_state *ds,
                        int           lc,
                        double       *cwt,
@@ -816,6 +836,7 @@ void c_interp_eigenvec(disort_state *ds,
                        double       *ylmc,
                        double       *ylmu);
 
+DISPATCH_MACRO
 void c_interp_source(disort_state   *ds,
                      int             lc,
                      double         *cwt,
@@ -838,6 +859,7 @@ void c_interp_source(disort_state   *ds,
 		     double         *zgu,
                      disort_pair    *zu);
 
+DISPATCH_MACRO
 void c_set_coefficients_beam_source(disort_state *ds,
 				    double       *ch,
 				    double       *chtau,
@@ -855,6 +877,7 @@ void c_set_coefficients_beam_source(disort_state *ds,
 				    double       *ylmc,
 				    double       *zj);
 
+DISPATCH_MACRO
 void c_interp_coefficients_beam_source(disort_state   *ds,
 				       double         *chtau,
 				       double          delm0,
@@ -871,6 +894,7 @@ void c_interp_coefficients_beam_source(disort_state   *ds,
 				       double         *ylm0,
 				       double         *ylmu);
 
+DISPATCH_MACRO
 void c_upbeam(disort_state *ds,
               int           lc,
               double       *array,
@@ -887,6 +911,7 @@ void c_upbeam(disort_state *ds,
               double       *zj,
               double       *zz);
 
+DISPATCH_MACRO
 void c_upbeam_pseudo_spherical(disort_state *ds,
 			       int           lc,
 			       double       *array, 
@@ -902,6 +927,7 @@ void c_upbeam_pseudo_spherical(disort_state *ds,
 			       disort_pair  *zbeamsp,
 			       double       *zbeama);
 
+DISPATCH_MACRO
 void c_upbeam_general_source(disort_state *ds,
 			     int           lc,
  			     int           maz,
@@ -913,6 +939,7 @@ void c_upbeam_general_source(disort_state *ds,
 			     double       *zjg,
 			     double       *zzg);
 
+DISPATCH_MACRO
 void c_upisot(disort_state *ds,
               int           lc,
               double       *array,
@@ -926,6 +953,7 @@ void c_upisot(disort_state *ds,
               disort_pair  *zee,
               disort_pair  *plk);
 
+DISPATCH_MACRO
 void c_user_intensities(disort_state   *ds,
                         double          bplanck,
                         double         *cmu,
@@ -959,10 +987,12 @@ void c_user_intensities(disort_state   *ds,
                         disort_pair    *plk,
                         double         *uum);
 
+DISPATCH_MACRO
 double c_xi_func(double umu1,
                  double umu2,
                  double tau);
 
+DISPATCH_MACRO
 int c_check_inputs(disort_state *ds,
                     int           scat_yes,
                     int           deltam,
@@ -970,6 +1000,7 @@ int c_check_inputs(disort_state *ds,
                     double       *tauc,
 		    int           callnum);
 
+DISPATCH_MACRO
 void c_legendre_poly(int     nmu,
                      int     m,
                      int     maxmu,
@@ -977,9 +1008,11 @@ void c_legendre_poly(int     nmu,
                      double *mu,
                      double *ylm);
 
+DISPATCH_MACRO
 void c_print_avg_intensities(disort_state *ds,
 			     disort_output *out);
 
+DISPATCH_MACRO
 void c_print_inputs(disort_state *ds,
                     double       *dtaucpr,
                     int           scat_yes,
@@ -991,24 +1024,30 @@ void c_print_inputs(disort_state *ds,
                     double       *tauc,
                     double       *taucpr);
 
+DISPATCH_MACRO
 void c_print_intensities(disort_state  *ds,
                          disort_output *out);
 
+DISPATCH_MACRO
 void c_gaussian_quadrature(int    m,
                            double *gmu,
                            double *gwt);
 
+DISPATCH_MACRO
 double c_ratio(double a,
                double b);
 
+DISPATCH_MACRO
 int c_fcmp(double x1,
            double x2);
 
+DISPATCH_MACRO
 void c_self_test(int            compare,
                  int           *prntu0,
                  disort_state  *ds,
                  disort_output *out);
 
+DISPATCH_MACRO
 void c_albtrans(disort_state  *ds,
                 disort_output *out,
                 disort_pair   *ab,
@@ -1035,6 +1074,7 @@ void c_albtrans(disort_state  *ds,
                 double        *z,
                 double        *wk);
 
+DISPATCH_MACRO
 void c_albtrans_intensity(disort_state *ds,
 			  disort_output *out,
                           double       *gu,
@@ -1044,9 +1084,11 @@ void c_albtrans_intensity(disort_state *ds,
                           double       *taucpr,
                           double       *wk);
 
+DISPATCH_MACRO
 void c_print_albtrans(disort_state  *ds,
                       disort_output *out);
 
+DISPATCH_MACRO
 void c_solve1(disort_state *ds,
               double       *cband,
               int           ihom,
@@ -1057,6 +1099,7 @@ void c_solve1(disort_state *ds,
               double       *b,
               double       *ll);
 
+DISPATCH_MACRO
 void c_albtrans_spherical(disort_state *ds,
                           double       *cmu,
                           double       *cwt,
@@ -1068,16 +1111,20 @@ void c_albtrans_spherical(disort_state *ds,
                           double       *sflup,
                           double       *sfldn);
 
+DISPATCH_MACRO
 void c_errmsg(char const *messag,
               int   type);
 
+DISPATCH_MACRO
 int c_write_bad_var(int   quiet,
                     char const *varnam);
 
+DISPATCH_MACRO
 int c_write_too_small_dim(int   quiet,
                           char const *dimnam,
                           int   minval);
 
+DISPATCH_MACRO
 void c_sgbco(double *abd,
              int     lda,
              int     n,
@@ -1087,6 +1134,7 @@ void c_sgbco(double *abd,
              double *rcond,
              double *z);
 
+DISPATCH_MACRO
 void c_sgbfa(double *abd,
              int     lda,
              int     n,
@@ -1095,6 +1143,7 @@ void c_sgbfa(double *abd,
              int    *ipvt,
              int    *info);
 
+DISPATCH_MACRO
 void c_sgbsl(double *abd,
              int     lda,
              int     n,
@@ -1104,6 +1153,7 @@ void c_sgbsl(double *abd,
              double *b,
              int     job);
 
+DISPATCH_MACRO
 void c_sgeco(double *a,
              int     lda,
              int     n,
@@ -1111,12 +1161,14 @@ void c_sgeco(double *a,
              double *rcond,
              double *z);
 
+DISPATCH_MACRO
 void c_sgefa(double *a,
              int     lda,
              int     n,
              int    *ipvt,
              int    *info);
 
+DISPATCH_MACRO
 void c_sgesl(double *a,
              int     lda,
              int     n,
@@ -1124,25 +1176,31 @@ void c_sgesl(double *a,
              double *b,
              int     job);
 
+DISPATCH_MACRO
 double c_sasum(int     n,
                double *sx);
 
+DISPATCH_MACRO
 void c_saxpy(int     n,
              double  sa,
              double *sx,
              double *sy);
 
+DISPATCH_MACRO
 double c_sdot(int     n,
               double *sx,
               double *sy);
 
+DISPATCH_MACRO
 void c_sscal(int    n,
             double  sa,
             double *sx);
 
+DISPATCH_MACRO
 int c_isamax(int     n,
              double *sx);
 
+DISPATCH_MACRO
 void c_twostr(disort_state  *ds,
               disort_output *out,
               int            deltam,
@@ -1151,6 +1209,7 @@ void c_twostr(disort_state  *ds,
               double         radius,
               emission_func_t emi_func);
 
+DISPATCH_MACRO
 double c_chapman(int     lc,
                  double  taup,
                  double *tauc,
@@ -1160,6 +1219,7 @@ double c_chapman(int     lc,
                  double  zenang,
                  double  r);
 
+DISPATCH_MACRO
 double c_chapman_simpler(int     lc,
                  double  taup,
                  int     nlyr,
@@ -1168,11 +1228,13 @@ double c_chapman_simpler(int     lc,
                  double  zenang,
                  double  r);
 
+DISPATCH_MACRO
 void c_twostr_check_inputs(disort_state *ds,
                            double       *gg,
                            int          *ierror,
                            double       *tauc);
 
+DISPATCH_MACRO
 void c_twostr_fluxes(disort_state  *ds,
                    twostr_xyz      *ts,
                    double          *ch,
@@ -1190,6 +1252,7 @@ void c_twostr_fluxes(disort_state  *ds,
                    double          *u0c,
                    disort_pair     *fl);
 
+DISPATCH_MACRO
 void c_twostr_solns(disort_state *ds,
                     double       *ch,
                     double       *chtau,
@@ -1204,6 +1267,7 @@ void c_twostr_solns(disort_state *ds,
                     double       *rr,
                     twostr_xyz   *ts);
 
+DISPATCH_MACRO
 void c_twostr_print_inputs(disort_state *ds,
                            int           deltam,
                            double       *flyr,
@@ -1213,6 +1277,7 @@ void c_twostr_print_inputs(disort_state *ds,
                            double       *tauc,
                            double       *taucpr);
 
+DISPATCH_MACRO
 void c_twostr_set(disort_state *ds,
                   double       *bplanck,
                   double       *ch,
@@ -1238,6 +1303,7 @@ void c_twostr_set(disort_state *ds,
                   double       *utaupr,
                   emission_func_t  emi_func);
 
+DISPATCH_MACRO
 void c_twostr_solve_bc(disort_state *ds,
                        twostr_xyz   *ts,
                        double        bplanck,
@@ -1256,29 +1322,39 @@ void c_twostr_solve_bc(disort_state *ds,
                        double       *ll,
                        twostr_diag  *diag);
 
+DISPATCH_MACRO
 void c_disort_state_alloc(disort_state *ds);
 
+DISPATCH_MACRO
 void c_disort_state_free(disort_state *ds);
 
+DISPATCH_MACRO
 void c_disort_out_alloc(disort_state  *ds,
                         disort_output *out);
 
+DISPATCH_MACRO
 void c_disort_out_free(disort_state  *ds,
                        disort_output *out);
 
+DISPATCH_MACRO
 void c_twostr_state_alloc(disort_state *ds);
 
+DISPATCH_MACRO
 void c_twostr_state_free(disort_state *ds);
 
+DISPATCH_MACRO
 void c_twostr_out_alloc(disort_state  *ds,
                         disort_output *out);
 
+DISPATCH_MACRO
 void c_twostr_out_free(disort_state  *ds,
                        disort_output *out);
 
+DISPATCH_MACRO
 double *c_dbl_vector(int  nl, 
                      int  nh,
 		     char const *name);
+DISPATCH_MACRO
 int *c_int_vector(int  nl, 
 		  int  nh,
 		  char const *name);
@@ -1288,10 +1364,12 @@ void print_test(disort_state  *ds_calc,
                 disort_state  *ds_good,
                 disort_output *good);
 
+DISPATCH_MACRO
 void c_free_dbl_vector(double *m, 
                        int     nl, 
                        int     nh);
 
+DISPATCH_MACRO
 int c_setout( float *sdtauc,
 	      int    nlyr,
 	      int    ntau,
@@ -1299,6 +1377,7 @@ int c_setout( float *sdtauc,
 	      float *z,
 	      float *zout );
 
+DISPATCH_MACRO
 double c_inter( int     npoints,
 		int     itype,
 		double  arg,
@@ -1306,6 +1385,7 @@ double c_inter( int     npoints,
 		double *yarr,
 		double *hh );
 
+DISPATCH_MACRO
 int c_gaussian_quadrature_test(int nstr, float *sza, double umu0);
 
 void disort_test01(void);
