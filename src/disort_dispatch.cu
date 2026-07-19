@@ -4,6 +4,7 @@
 #include <ATen/native/ReduceOpsUtils.h>
 #include <ATen/native/DispatchStub.h>
 #include <c10/cuda/CUDAGuard.h>
+#include <c10/cuda/CUDAException.h>
 
 // disort
 #include <disort/loops.cuh>
@@ -12,15 +13,62 @@
 
 namespace disort {
 
-void call_disort_cuda(at::TensorIterator& iter, int rank_in_column,
+// Native GPU path: one thread runs one (wave, column) element of the
+// iterator, executing the same disort_impl -> c_disort code as the CPU
+// path with all work memory served by the per-thread pmem pool.
+//
+// Differences from the CPU path (by design):
+//   - results are returned only through the flx output tensor; the host
+//     ds_out array is not written, so DisortImpl::gather_flx/gather_rad
+//     remain CPU-only.
+//   - the emission callback is c_planck_func2, as hard-coded in
+//     disort_impl for the CPU path as well.
+void call_disort_cuda(at::TensorIterator& iter, int upward,
                       disort_state *ds, disort_output *ds_out) {
   at::cuda::CUDAGuard device_guard(iter.device());
+  (void)ds_out;
+
+  int64_t numel = iter.numel();
+  if (numel == 0) return;
+
+  // Template state for every element; per-element differences are only
+  // wvnmlo/wvnmhi (see DisortImpl::reset), which are gathered below.
+  disort_state ds0 = ds[0];
+
+  std::vector<double> wvnmlo(numel), wvnmhi(numel);
+  for (int64_t i = 0; i < numel; ++i) {
+    wvnmlo[i] = ds[i].wvnmlo;
+    wvnmhi[i] = ds[i].wvnmhi;
+  }
+
+  // device copies of the host-side per-state arrays filled by reset()
+  auto to_device = [](const double *src, size_t n) -> double * {
+    if (src == nullptr || n == 0) return nullptr;
+    double *dst = nullptr;
+    C10_CUDA_CHECK(cudaMalloc(&dst, n * sizeof(double)));
+    C10_CUDA_CHECK(
+        cudaMemcpy(dst, src, n * sizeof(double), cudaMemcpyHostToDevice));
+    return dst;
+  };
+  double *d_wvnmlo = to_device(wvnmlo.data(), numel);
+  double *d_wvnmhi = to_device(wvnmhi.data(), numel);
+  double *d_utau =
+      ds0.flag.usrtau ? to_device(ds0.utau, ds0.ntau) : nullptr;
+  double *d_umu = ds0.flag.usrang ? to_device(ds0.umu, ds0.numu) : nullptr;
+  double *d_phi = ds0.flag.usrang ? to_device(ds0.phi, ds0.nphi) : nullptr;
+
+  // c_disort's call chain is deep and holds NMUG-sized local arrays;
+  // raise the device stack limit well above the default.
+  C10_CUDA_CHECK(cudaDeviceSetLimit(cudaLimitStackSize, 32 * 1024));
+
+  size_t work_size = c_disort_work_size(&ds0);
 
   AT_DISPATCH_FLOATING_TYPES(iter.dtype(), "call_disort_cuda", [&] {
-    auto nprop = at::native::ensure_nonempty_size(iter.output(), -1);
+    int nprop = (int)at::native::ensure_nonempty_size(iter.input(0), -1);
 
-    native::gpu_kernel<12>(
-        iter, [=] GPU_LAMBDA(char* const data[12], unsigned int strides[12]) {
+    native::gpu_chunk_kernel<8, 13>(
+        iter, work_size,
+        [=] GPU_LAMBDA(char* const data[13], const unsigned int strides[13]) {
           auto out = reinterpret_cast<scalar_t*>(data[0] + strides[0]);
           auto prop = reinterpret_cast<scalar_t*>(data[1] + strides[1]);
           auto umu0 = reinterpret_cast<scalar_t*>(data[2] + strides[2]);
@@ -35,10 +83,35 @@ void call_disort_cuda(at::TensorIterator& iter, int rank_in_column,
           auto temf = reinterpret_cast<scalar_t*>(data[11] + strides[11]);
           auto idxf = reinterpret_cast<scalar_t*>(data[12] + strides[12]);
           int idx = static_cast<int>(*idxf);
-          //  disort_impl(out, prop, ftoa, temf, rank_in_column, ds[*idx],
-          //            ds_out[*idx], nprop);
+
+          // fresh per-thread pool, then a pool-backed clone of the state
+          // -- the device analogue of DisortImpl::reset()
+          pmem::pool_init();
+          disort_state d = ds0;
+          disort_output o;
+          d.wvnmlo = d_wvnmlo[idx];
+          d.wvnmhi = d_wvnmhi[idx];
+          c_disort_state_alloc(&d);
+          c_disort_out_alloc(&d, &o);
+          if (d.flag.usrtau) {
+            for (int j = 0; j < d.ntau; ++j) d.utau[j] = d_utau[j];
+          }
+          if (d.flag.usrang) {
+            for (int j = 0; j < d.numu; ++j) d.umu[j] = d_umu[j];
+            for (int j = 0; j < d.nphi; ++j) d.phi[j] = d_phi[j];
+          }
+
+          disort_impl(out, prop, umu0, phi0, fbeam, albedo, fluor, fisot,
+                      temis, btemp, ttemp, temf, upward, d, o, nprop);
+          // no frees: the next element's pool_init resets the slice
         });
   });
+
+  cudaFree(d_wvnmlo);
+  cudaFree(d_wvnmhi);
+  cudaFree(d_utau);
+  cudaFree(d_umu);
+  cudaFree(d_phi);
 }
 
 }  // namespace disort
