@@ -558,10 +558,27 @@ DISPATCH_MACRO inline int c_disort(disort_state  *ds,
    * Allocate zeroed memory
    */
   array   = c_dbl_vector(0,ds->nstr*ds->nstr-1,"array");
-  b       = c_dbl_vector(0,ds->nstr*ds->nlyr-1,"b");
+#ifdef __CUDA_ARCH__
+  if (ds->flag.onlyfl) {
+    b = c_dbl_vector_uninitialized(0,ds->nstr*ds->nlyr-1,"b");
+  }
+  else
+#endif
+  {
+    b = c_dbl_vector(0,ds->nstr*ds->nlyr-1,"b");
+  }
   bdr     = c_dbl_vector(0,((ds->nstr/2)+1)*(ds->nstr/2)-1,"bdr");
   bem     = c_dbl_vector(0,(ds->nstr/2)-1,"bem");
-  cband   = c_dbl_vector(0,ds->nstr*ds->nlyr*(9*(ds->nstr/2)-2)-1,"cband");
+#ifdef __CUDA_ARCH__
+  if (ds->flag.onlyfl) {
+    cband = c_dbl_vector_uninitialized(
+        0,ds->nstr*ds->nlyr*(9*(ds->nstr/2)-2)-1,"cband");
+  }
+  else
+#endif
+  {
+    cband = c_dbl_vector(0,ds->nstr*ds->nlyr*(9*(ds->nstr/2)-2)-1,"cband");
+  }
   cc      = c_dbl_vector(0,ds->nstr*ds->nstr-1,"cc");
   ch      = c_dbl_vector(0,ds->nlyr-1,"ch");
   chtau   = c_dbl_vector(0,(2*ds->nlyr+1)-1,"chtau");
@@ -591,7 +608,15 @@ DISPATCH_MACRO inline int c_disort(disort_state  *ds,
   pkag   = c_dbl_vector(0,ds->nlyr,"pkag");
   rmu    = c_dbl_vector(0,((ds->nstr/2)+1)*ds->numu-1,"rmu");
   taucpr = c_dbl_vector(0,ds->nlyr,"taucpr");
-  u0c    = c_dbl_vector(0,ds->ntau*ds->nstr-1,"u0c");
+#ifdef __CUDA_ARCH__
+  if (ds->flag.onlyfl) {
+    u0c = c_dbl_vector_uninitialized(0,ds->ntau*ds->nstr-1,"u0c");
+  }
+  else
+#endif
+  {
+    u0c = c_dbl_vector(0,ds->ntau*ds->nstr-1,"u0c");
+  }
   utaupr = c_dbl_vector(0,ds->ntau-1,"utaupr");
   uum    = c_dbl_vector(0,ds->ntau*ds->numu-1,"uum");
   wk     = c_dbl_vector(0,ds->nstr-1,"wk");
@@ -612,7 +637,16 @@ DISPATCH_MACRO inline int c_disort(disort_state  *ds,
    * Using C structures facilitates cache-aware memory allocation, which can reduce
    * cache misses and potentially speed up computer execution.
    */
-  fl     = (disort_pair *)pcalloc(ds->ntau,sizeof(disort_pair));                  if (!fl)      c_errmsg("disort alloc error for fl", DS_ERROR);
+#ifdef __CUDA_ARCH__
+  if (ds->flag.onlyfl) {
+    fl = (disort_pair *)pmalloc(ds->ntau*sizeof(disort_pair));
+  }
+  else
+#endif
+  {
+    fl = (disort_pair *)pcalloc(ds->ntau,sizeof(disort_pair));
+  }
+  if (!fl) c_errmsg("disort alloc error for fl", DS_ERROR);
   plk    = (disort_pair *)pcalloc(ds->nlyr*ds->nstr,sizeof(disort_pair));         if (!plk)     c_errmsg("disort alloc error for plk",DS_ERROR);
   ab     = (disort_pair *)pcalloc((ds->nstr/2)*(ds->nstr/2),sizeof(disort_pair)); if (!ab)      c_errmsg("disort alloc error for ab", DS_ERROR);
   xr     = (disort_pair *)pcalloc(ds->nlyr,sizeof(disort_pair));                  if (!xr)      c_errmsg("disort alloc error for xr", DS_ERROR);

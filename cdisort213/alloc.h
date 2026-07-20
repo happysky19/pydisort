@@ -369,6 +369,36 @@ DISPATCH_MACRO inline double *c_dbl_vector(int  nl,
 
 /*============================= end of c_dbl_vector() ===================*/
 
+/*
+ * Allocates a 1D double-precision array with range [nl..nh] without
+ * initializing it.  CUDA flux-only calls use this only for buffers that are
+ * cleared unconditionally before their first read.
+ */
+DISPATCH_MACRO inline double *c_dbl_vector_uninitialized(int nl,
+                                                          int nh,
+                                                          char const *name)
+{
+  unsigned int len_safe;
+  int nl_safe, nh_safe;
+  double *m;
+
+  if (nh < nl) {
+    fprintf(stderr,"\n\n**error:%s, variable %s, range (%d,%d)\n",
+            "dbl_vector",name,nl,nh);
+    exit(1);
+  }
+
+  nl_safe = (nl < 0) ? nl : 0;
+  nh_safe = (nh > 0) ? nh : 0;
+  len_safe = (unsigned)(nh_safe-nl_safe+1);
+  m = (double *)pmalloc(len_safe*sizeof(double));
+
+  if (!m) {
+    c_errmsg("dbl_vector---alloc error",DS_ERROR);
+  }
+  return m - nl_safe;
+}
+
 /*============================= c_int_vector() ==========================*/
 
 /*
