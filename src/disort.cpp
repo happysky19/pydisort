@@ -403,7 +403,7 @@ torch::Tensor DisortImpl::forward(torch::Tensor prop,
           .build();
 
   at::native::call_disort(flx.device().type(), iter, options->upward(),
-                          ds_.data(), ds_out_.data());
+                          ds_.data(), ds_out_.data(), &cuda_workspace_);
 
   // save result tensor options
   result_options_ = flx.options();

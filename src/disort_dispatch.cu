@@ -24,7 +24,8 @@ namespace disort {
 //   - the emission callback is c_planck_func2, as hard-coded in
 //     disort_impl for the CPU path as well.
 void call_disort_cuda(at::TensorIterator& iter, int upward,
-                      disort_state *ds, disort_output *ds_out) {
+                      disort_state *ds, disort_output *ds_out,
+                      at::Tensor *cuda_workspace) {
   at::cuda::CUDAGuard device_guard(iter.device());
   (void)ds_out;
 
@@ -66,8 +67,8 @@ void call_disort_cuda(at::TensorIterator& iter, int upward,
   AT_DISPATCH_FLOATING_TYPES(iter.dtype(), "call_disort_cuda", [&] {
     int nprop = (int)at::native::ensure_nonempty_size(iter.input(0), -1);
 
-    native::gpu_chunk_kernel<8, 13>(
-        iter, work_size,
+    native::gpu_chunk_kernel<13>(
+        iter, work_size, cuda_workspace,
         [=] GPU_LAMBDA(char* const data[13], const unsigned int strides[13]) {
           auto out = reinterpret_cast<scalar_t*>(data[0] + strides[0]);
           auto prop = reinterpret_cast<scalar_t*>(data[1] + strides[1]);

@@ -237,12 +237,18 @@ class DisortImpl : public torch::nn::Cloneable<DisortImpl> {
                         std::string bname = "",
                         torch::optional<torch::Tensor> temf = torch::nullopt);
 
+  //! Release the cached CUDA workspace associated with this solver instance.
+  void release_cuda_workspace() { cuda_workspace_ = torch::Tensor(); }
+
  protected:
   // This allows type erasure with default arguments
   FORWARD_HAS_DEFAULT_ARGS({2, torch::nn::AnyValue("")},
                            {3, torch::nn::AnyValue(torch::nullopt)})
 
  private:
+  //! Reused CUDA scratch storage; ignored by the CPU dispatch path.
+  torch::Tensor cuda_workspace_;
+
   //! flat array of disort states (nwave * ncol)
   std::vector<disort_state> ds_;
 
