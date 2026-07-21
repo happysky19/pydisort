@@ -26,6 +26,8 @@ fc=${FC:-gfortran}
 warmup=${EXOFMS_WARMUP:-3}
 repeats=${EXOFMS_REPEATS:-10}
 layers=${EXOFMS_LAYERS:-40}
+ssa=${EXOFMS_SSA:-0.5}
+asymmetry=${EXOFMS_ASYMMETRY:-0.5}
 
 "$fc" -O3 -fopenmp -ffree-line-length-none -J "$build_dir" -I "$build_dir" \
   "$exofms_root/src/WENO4_mod.f90" \
@@ -35,5 +37,5 @@ layers=${EXOFMS_LAYERS:-40}
   -o "$build_dir/benchmark_exofms_toon"
 
 for nprofile in "${profiles[@]}"; do
-  "$build_dir/benchmark_exofms_toon" "$nprofile" "$layers" "$warmup" "$repeats"
+  "$build_dir/benchmark_exofms_toon" "$nprofile" "$layers" "$warmup" "$repeats" "$ssa" "$asymmetry"
 done

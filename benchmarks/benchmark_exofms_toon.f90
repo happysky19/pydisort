@@ -4,6 +4,7 @@
 program benchmark_exofms_toon
   use, intrinsic :: iso_fortran_env, only : real64
   use omp_lib, only : omp_get_max_threads, omp_get_wtime
+  use WENO4_mod, only : interpolate_weno4
   use sw_Toon_mod, only : sw_Toon
   use lw_Toon_mod, only : lw_Toon
   implicit none
@@ -12,24 +13,29 @@ program benchmark_exofms_toon
   integer :: nprofile, nlay, nlev, warmup, repeats
   integer :: profile, repeat, level, omp_threads
   real(dp) :: sw_seconds, lw_seconds, checksum, wall_start
-  real(dp) :: f_inc, albedo, tint, contribution
+  real(dp) :: f_inc, sw_albedo, lw_albedo, tint, contribution, ssa_value, asymmetry_value
   real(dp), allocatable :: tau_edge(:, :), mu_z(:, :), ssa(:, :), asymmetry(:, :)
   real(dp), allocatable :: temperature(:, :), pressure_layer(:, :), pressure_edge(:, :)
+  real(dp), allocatable :: temperature_edge(:, :)
   real(dp), allocatable :: sw_up(:, :), sw_down(:, :), sw_net(:, :)
   real(dp), allocatable :: lw_up(:, :), lw_down(:, :), lw_net(:, :)
   character(len=32) :: argument
+  logical :: print_accuracy
 
   call require_integer_argument(1, nprofile, 'nprofile')
   call optional_integer_argument(2, 40, nlay)
   call optional_integer_argument(3, 1, warmup)
   call optional_integer_argument(4, 3, repeats)
-  if (nprofile < 1 .or. nlay < 4 .or. nlay > 150 .or. warmup < 0 .or. repeats < 1) then
-    error stop 'usage: benchmark_exofms_toon nprofile [nlay=40] [warmup=1] [repeats=3]'
+  call optional_real_argument(5, 0.5_dp, ssa_value)
+  call optional_real_argument(6, 0.5_dp, asymmetry_value)
+  if (nprofile < 1 .or. nlay < 11 .or. nlay > 150 .or. warmup < 0 .or. repeats < 1) then
+    error stop 'usage: benchmark_exofms_toon nprofile [nlay=40] [warmup=1] [repeats=3] [ssa=0.5] [g=0.5]'
   end if
 
   nlev = nlay + 1
   allocate(tau_edge(nlev, nprofile), mu_z(nlev, nprofile), ssa(nlay, nprofile), asymmetry(nlay, nprofile))
   allocate(temperature(nlay, nprofile), pressure_layer(nlay, nprofile), pressure_edge(nlev, nprofile))
+  allocate(temperature_edge(nlev, nprofile))
   allocate(sw_up(nlev, nprofile), sw_down(nlev, nprofile), sw_net(nlev, nprofile))
   allocate(lw_up(nlev, nprofile), lw_down(nlev, nprofile), lw_net(nlev, nprofile))
 
@@ -41,14 +47,34 @@ program benchmark_exofms_toon
     end do
     do level = 1, nlay
       pressure_layer(level, profile) = sqrt(pressure_edge(level, profile) * pressure_edge(level + 1, profile))
-      temperature(level, profile) = 300.0_dp - 0.5_dp * real(level - 1, dp)
+      if (level <= 5) then
+        temperature(level, profile) = 1.0_dp
+      else if (level >= nlay - 4) then
+        temperature(level, profile) = 300.0_dp
+      else
+        temperature(level, profile) = 1.0_dp + 299.0_dp * real(level - 5, dp) / real(nlay - 10, dp)
+      end if
     end do
+    temperature_edge(:, profile) = interpolate_weno4(pressure_edge(:, profile), pressure_layer(:, profile), &
+      temperature(:, profile), .False.)
+    temperature_edge(1, profile) = 10.0_dp**(log10(temperature(1, profile)) + &
+      (log10(pressure_edge(1, profile) / pressure_edge(2, profile)) / &
+      log10(pressure_layer(1, profile) / pressure_edge(2, profile))) * &
+      log10(temperature(1, profile) / temperature_edge(2, profile)))
+    temperature_edge(nlev, profile) = 10.0_dp**(log10(temperature(nlay, profile)) + &
+      (log10(pressure_edge(nlev, profile) / pressure_layer(nlay, profile)) / &
+      log10(pressure_layer(nlay, profile) / pressure_edge(nlay, profile))) * &
+      log10(temperature(nlay, profile) / temperature_edge(nlev - 1, profile)))
   end do
-  ssa = 0.5_dp
-  asymmetry = 0.5_dp
+  ssa = ssa_value
+  asymmetry = asymmetry_value
   f_inc = 1.0_dp
-  albedo = 0.1_dp
-  tint = 100.0_dp
+  sw_albedo = 0.1_dp
+  lw_albedo = 0.0_dp
+  tint = 0.0_dp
+  argument = ''
+  call get_environment_variable('EXOFMS_PRINT_ACCURACY', argument)
+  print_accuracy = len_trim(argument) > 0 .and. trim(argument) /= '0'
   omp_threads = omp_get_max_threads()
 
   checksum = 0.0_dp
@@ -56,12 +82,12 @@ program benchmark_exofms_toon
 !$omp parallel do reduction(+:checksum) private(contribution) schedule(static)
     do profile = 1, nprofile
       call sw_contribution(nlay, nlev, tau_edge(:, profile), mu_z(:, profile), f_inc, ssa(:, profile), &
-                           asymmetry(:, profile), albedo, sw_up(:, profile), sw_down(:, profile), &
+                           asymmetry(:, profile), sw_albedo, sw_up(:, profile), sw_down(:, profile), &
                            sw_net(:, profile), contribution)
       checksum = checksum + contribution
       call lw_contribution(nlay, nlev, temperature(:, profile), pressure_layer(:, profile), &
                            pressure_edge(:, profile), tau_edge(:, profile), ssa(:, profile), &
-                           asymmetry(:, profile), albedo, tint, lw_up(:, profile), lw_down(:, profile), &
+                           asymmetry(:, profile), lw_albedo, tint, lw_up(:, profile), lw_down(:, profile), &
                            lw_net(:, profile), contribution)
       checksum = checksum + contribution
     end do
@@ -73,7 +99,7 @@ program benchmark_exofms_toon
 !$omp parallel do reduction(+:checksum) private(contribution) schedule(static)
     do profile = 1, nprofile
       call sw_contribution(nlay, nlev, tau_edge(:, profile), mu_z(:, profile), f_inc, ssa(:, profile), &
-                           asymmetry(:, profile), albedo, sw_up(:, profile), sw_down(:, profile), &
+                           asymmetry(:, profile), sw_albedo, sw_up(:, profile), sw_down(:, profile), &
                            sw_net(:, profile), contribution)
       checksum = checksum + contribution
     end do
@@ -87,7 +113,7 @@ program benchmark_exofms_toon
     do profile = 1, nprofile
       call lw_contribution(nlay, nlev, temperature(:, profile), pressure_layer(:, profile), &
                            pressure_edge(:, profile), tau_edge(:, profile), ssa(:, profile), &
-                           asymmetry(:, profile), albedo, tint, lw_up(:, profile), lw_down(:, profile), &
+                           asymmetry(:, profile), lw_albedo, tint, lw_up(:, profile), lw_down(:, profile), &
                            lw_net(:, profile), contribution)
       checksum = checksum + contribution
     end do
@@ -101,6 +127,14 @@ program benchmark_exofms_toon
   write(*, '(a,f0.9)') 'exofms_sw_toon_seconds=', sw_seconds
   write(*, '(a,f0.9)') 'exofms_lw_toon_5node_seconds=', lw_seconds
   write(*, '(a,es24.16)') 'checksum=', checksum
+  if (print_accuracy) then
+    do level = 1, nlev
+      write(*, '(a,i0,a,es24.16,a,es24.16,a,es24.16,a,es24.16,a,es24.16)') &
+        'accuracy_level=', level, ',temperature=', temperature_edge(level, 1), &
+        ',sw_up=', sw_up(level, 1), ',sw_down=', sw_down(level, 1), &
+        ',lw_up=', lw_up(level, 1), ',lw_down=', lw_down(level, 1)
+    end do
+  end if
 
 contains
 
@@ -124,6 +158,18 @@ contains
       read(argument, *) value
     end if
   end subroutine optional_integer_argument
+
+  subroutine optional_real_argument(position, default_value, value)
+    integer, intent(in) :: position
+    real(dp), intent(in) :: default_value
+    real(dp), intent(out) :: value
+
+    value = default_value
+    if (command_argument_count() >= position) then
+      call get_command_argument(position, argument)
+      read(argument, *) value
+    end if
+  end subroutine optional_real_argument
 
   subroutine sw_contribution(nlay, nlev, tau_edge, mu_z, f_inc, ssa, asymmetry, albedo, &
                              sw_up, sw_down, sw_net, result)

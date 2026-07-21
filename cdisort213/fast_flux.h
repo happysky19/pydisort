@@ -388,6 +388,45 @@ DISPATCH_MACRO inline int c_fast_flux(disort_state *ds, disort_output *out)
     abstau += (1. - SSALB(lc)) * DTAUC(lc);
   }
 
+  if (!ds->flag.planck && ds->bc.fbeam > 0. && ds->bc.umu0 > 0. &&
+      ds->bc.fisot == 0. &&
+      ds->bc.fluor == 0.) {
+    int pure_absorption = TRUE;
+    for (lc = 1; lc <= ds->nlyr; ++lc) {
+      if (SSALB(lc) != 0.) {
+        pure_absorption = FALSE;
+        break;
+      }
+    }
+    if (pure_absorption) {
+      double cmu[NSTR / 2], cwt[NSTR / 2];
+      c_gaussian_quadrature(NSTR / 2, cmu, cwt);
+      const double bottom_direct = ds->bc.umu0 * ds->bc.fbeam *
+          exp(-TAUC(ds->nlyr) / ds->bc.umu0);
+      int ncut = ds->nlyr;
+      double absorption = 0.;
+      for (lc = 1; lc <= ds->nlyr; ++lc) {
+        if (absorption < 10.) ncut = lc;
+        absorption += DTAUC(lc);
+      }
+      const int lyrcut = absorption >= 10. && ds->nlyr > 1;
+      for (int lu = 1; lu <= ds->ntau; ++lu) {
+        if (lyrcut && lu - 1 > ncut) continue;
+        const double tau = TAUC(lu - 1);
+        double transmission = 0.;
+        for (int iq = 0; iq < NSTR / 2; ++iq) {
+          transmission += 2. * cwt[iq] * cmu[iq] *
+              exp(-(TAUC(ds->nlyr) - tau) / cmu[iq]);
+        }
+        RFLDIR(lu) = ds->bc.umu0 * ds->bc.fbeam *
+            exp(-tau / ds->bc.umu0);
+        RFLDN(lu) = 0.;
+        FLUP(lu) = ds->bc.albedo * bottom_direct * transmission;
+      }
+      return 0;
+    }
+  }
+
   int deltam = TRUE;
   for (lc = 1; lc <= ds->nlyr; ++lc) {
     if (PMOM(ds->nstr, lc) != 0.) break;
