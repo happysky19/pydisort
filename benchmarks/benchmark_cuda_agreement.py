@@ -49,10 +49,16 @@ def solve(
     return output.cpu()
 
 
-def relative_rmse(value: torch.Tensor, reference: torch.Tensor) -> float:
+def relative_rmse(value: torch.Tensor, reference: torch.Tensor) -> float | None:
     scale = float(reference.square().mean().sqrt())
     error = float((value - reference).square().mean().sqrt())
-    return error / scale if scale else error
+    if scale:
+        return error / scale
+    return 0.0 if error == 0.0 else None
+
+
+def format_percent(value: float | None) -> str:
+    return "N/A" if value is None else f"{100 * value:.4g}"
 
 
 def report(
@@ -95,9 +101,9 @@ def report(
     angle = f"{umu0:.2f}" if mode == "shortwave" else "-"
     print(
         f"{label:<24} {nstr:4d} {optical_depth:6.2g} {albedo:5.2f} {angle:>6} "
-        f"{100 * relative_rmse(value[..., 0], reference[..., 0]):11.4g} "
-        f"{100 * relative_rmse(value[..., 1], reference[..., 1]):11.4g} "
-        f"{100 * relative_rmse(net_value, net_reference):11.4g} {max_abs:12.4g}"
+        f"{format_percent(relative_rmse(value[..., 0], reference[..., 0])):>11} "
+        f"{format_percent(relative_rmse(value[..., 1], reference[..., 1])):>11} "
+        f"{format_percent(relative_rmse(net_value, net_reference)):>11} {max_abs:12.4g}"
     )
 
 
