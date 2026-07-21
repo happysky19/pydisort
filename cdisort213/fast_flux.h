@@ -39,12 +39,25 @@ DISPATCH_MACRO inline void c_fast_flux_alloc(disort_state *ds,
   ds->mu_phase = NULL;
   ds->phase = NULL;
 
-  out->rad = (disort_radiant *)pmalloc(ds->ntau * sizeof(disort_radiant));
+  out->rad = (disort_radiant *)pcalloc(ds->ntau, sizeof(disort_radiant));
   out->uu = NULL;
   out->u0u = NULL;
   out->uum = NULL;
   out->albmed = NULL;
   out->trnmed = NULL;
+}
+
+/* Maximum extra storage used when the 8-stream block solve falls through to
+ * c_solve0.  The CUDA pool is a bump allocator, so both block workspaces can
+ * be live in that case. */
+DISPATCH_MACRO inline size_t c_fast_flux_work_size(const disort_state *ds)
+{
+  size_t bytes = c_disort_work_size(ds);
+  if (ds->nstr == 8) {
+    const size_t block = (size_t)(3 * ds->nlyr - 2) * 64 * sizeof(double);
+    bytes += 2 * block + (size_t)ds->nstr * ds->nlyr * sizeof(double);
+  }
+  return (bytes + 255) & ~(size_t)255;
 }
 
 DISPATCH_MACRO inline void c_fast_fluxes(disort_state *ds,

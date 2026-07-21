@@ -3,7 +3,8 @@
  * Host code uses libc allocation. CUDA code uses one bump-pointer slice per
  * solver thread; pool_init() resets the slice for each element, so pfree() is
  * a no-op on the device. The device globals are TU-local because the launcher
- * and bind_workspace() must refer to the same copy.
+ * and bind_workspace() must refer to the same copy. The helpers are static
+ * for the same reason: each CUDA translation unit must use its own symbols.
  */
 #ifndef __cdisort_pmem_h
 #define __cdisort_pmem_h

@@ -1,5 +1,6 @@
 // C/C++
 #include <map>
+#include <vector>
 
 // disort
 #include "disort.hpp"
@@ -424,9 +425,10 @@ torch::Tensor DisortImpl::forward(torch::Tensor prop,
   const bool fast_flux_eligible =
       prop.is_cuda() && c_fast_flux_eligible(&ds());
   const bool route_conservative = fast_flux_eligible && prop.size(3) > 1;
-  auto run_disort = [&](at::TensorIterator& iter, bool general_path) {
+  auto run_disort = [&](at::TensorIterator& iter, bool general_path,
+                        disort_state* states) {
     at::native::call_disort(flx.device().type(), iter, options->upward(),
-                            general_path, ds_.data(), ds_out_.data(),
+                            general_path, states, ds_out_.data(),
                             &cuda_workspace_);
   };
 
@@ -444,7 +446,15 @@ torch::Tensor DisortImpl::forward(torch::Tensor prop,
           flx, prop, bc->at("umu0"), bc->at("phi0"), bc->at("fbeam"),
           bc->at("albedo"), bc->at("fluor"), bc->at("fisot"),
           bc->at("temis"), bc->at("btemp"), bc->at("ttemp"), tem);
-      run_disort(fast_iter, false);
+      run_disort(fast_iter, false, ds_.data());
+
+      const auto host_indices = conservative_indices.cpu().contiguous();
+      const auto index_ptr = host_indices.data_ptr<int64_t>();
+      std::vector<disort_state> general_ds;
+      general_ds.reserve(nconservative);
+      for (int64_t i = 0; i < nconservative; ++i) {
+        general_ds.push_back(ds_[index_ptr[i]]);
+      }
 
       const auto column_indices = conservative_indices.remainder(ncol);
       auto select_column = [&](const torch::Tensor& input) {
@@ -468,7 +478,7 @@ torch::Tensor DisortImpl::forward(torch::Tensor prop,
           select_wave_column(bc->at("fisot")),
           select_wave_column(bc->at("temis")), select_column(bc->at("btemp")),
           select_column(bc->at("ttemp")), tem.index_select(0, column_indices));
-      run_disort(general_iter, true);
+      run_disort(general_iter, true, general_ds.data());
       flx.view({nwave * ncol, ds().ntau, 2})
           .index_copy_(0, conservative_indices,
                        sub_flx.view({nconservative, ds().ntau, 2}));
@@ -482,7 +492,7 @@ torch::Tensor DisortImpl::forward(torch::Tensor prop,
       flx, prop, bc->at("umu0"), bc->at("phi0"), bc->at("fbeam"),
       bc->at("albedo"), bc->at("fluor"), bc->at("fisot"), bc->at("temis"),
       bc->at("btemp"), bc->at("ttemp"), tem);
-  run_disort(iter, general_path);
+  run_disort(iter, general_path, ds_.data());
 
   // save result tensor options
   result_options_ = flx.options();

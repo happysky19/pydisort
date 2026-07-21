@@ -115,7 +115,8 @@ void call_disort_cuda(at::TensorIterator& iter, int upward, bool force_general,
   C10_CUDA_CHECK(cudaDeviceSetLimit(cudaLimitStackSize, kDisortStackBytes));
 
   bool fast_flux = !force_general && c_fast_flux_eligible(&ds0);
-  size_t work_size = c_disort_work_size(&ds0);
+  size_t work_size = fast_flux ? c_fast_flux_work_size(&ds0)
+                               : c_disort_work_size(&ds0);
   if (fast_flux && ds0.nstr == 4) {
     launch_disort_cuda<4>(iter, upward, ds0, d_wvnmlo, d_wvnmhi, d_utau,
                           d_umu, d_phi, work_size, cuda_workspace);
