@@ -2,8 +2,8 @@
  *
  * This retains the DISORT eigenproblem, boundary system, and flux equations.
  * It only omits storage and code paths which cannot contribute when the
- * caller has selected onlyfl, a Lambertian surface, and no thermal,
- * pseudo-spherical, or general source terms.
+ * caller has selected onlyfl, a Lambertian surface, and no pseudo-spherical
+ * or general source terms.
  */
 #pragma once
 
@@ -13,7 +13,7 @@
 DISPATCH_MACRO inline int c_fast_flux_eligible(const disort_state *ds)
 {
   return (ds->nstr == 4 || ds->nstr == 8) && ds->flag.onlyfl &&
-         ds->flag.lamber && !ds->flag.planck && !ds->flag.spher &&
+         ds->flag.lamber && !ds->flag.spher &&
          !ds->flag.general_source && !ds->flag.usrtau &&
          !ds->flag.usrang && !ds->flag.output_uum;
 }
@@ -27,7 +27,9 @@ DISPATCH_MACRO inline void c_fast_flux_alloc(disort_state *ds,
   ds->ssalb = c_dbl_vector_uninitialized(0, ds->nlyr, "ds->ssalb");
   ds->pmom = c_dbl_vector_uninitialized(
       0, (ds->nmom_nstr + 1) * ds->nlyr - 1, "ds->pmom");
-  ds->temper = NULL;
+  ds->temper = ds->flag.planck
+                   ? c_dbl_vector_uninitialized(0, ds->nlyr, "ds->temper")
+                   : NULL;
   ds->gensrc = NULL;
   ds->gensrcu = NULL;
   ds->ntau = ds->nlyr + 1;
@@ -55,7 +57,8 @@ DISPATCH_MACRO inline size_t c_fast_flux_work_size(const disort_state *ds)
   size_t bytes = c_disort_work_size(ds);
   if (ds->nstr == 8) {
     const size_t block = (size_t)(3 * ds->nlyr - 2) * 64 * sizeof(double);
-    bytes += 2 * block + (size_t)ds->nstr * ds->nlyr * sizeof(double);
+    bytes += block + (size_t)ds->nstr * ds->nlyr * sizeof(double);
+    if (!ds->flag.planck) bytes += block;
   }
   return (bytes + 255) & ~(size_t)255;
 }
@@ -66,7 +69,8 @@ DISPATCH_MACRO inline void c_fast_fluxes(disort_state *ds,
                                          double *gc, double *kk, int *layru,
                                          double *ll, int lyrcut, int ncut,
                                          int nn, double *taucpr,
-                                         double *utaupr, double *zz)
+                                         double *utaupr, double *zz,
+                                         disort_pair *plk)
 {
   for (int lu = 1; lu <= ds->ntau; ++lu) {
     int lyu = LAYRU(lu);
@@ -94,6 +98,8 @@ DISPATCH_MACRO inline void c_fast_fluxes(disort_state *ds,
                 exp(-KK(jq, lyu) * (UTAUPR(lu) - TAUCPR(lyu - 1)));
       }
       if (ds->bc.fbeam > 0.) zint += ZZ(iq, lyu) * fact;
+      if (ds->flag.planck)
+        zint += ZPLK0(iq, lyu) + ZPLK1(iq, lyu) * UTAUPR(lu);
       fldn += CWT(nn + 1 - iq) * zint * CMU(nn + 1 - iq);
     }
 
@@ -109,6 +115,8 @@ DISPATCH_MACRO inline void c_fast_fluxes(disort_state *ds,
                 exp(-KK(jq, lyu) * (UTAUPR(lu) - TAUCPR(lyu - 1)));
       }
       if (ds->bc.fbeam > 0.) zint += ZZ(iq, lyu) * fact;
+      if (ds->flag.planck)
+        zint += ZPLK0(iq, lyu) + ZPLK1(iq, lyu) * UTAUPR(lu);
       flup += CWT(iq - nn) * zint * CMU(iq - nn);
     }
 
@@ -316,7 +324,10 @@ DISPATCH_MACRO inline int c_fast_flux(disort_state *ds, disort_output *out)
   double *cmu, *cwt, *dtaucpr, *eval, *evecc, *expbea, *flyr;
   double *gc, *gl, *kk, *ll, *oprim, *tauc, *taucpr;
   double *utaupr, *wk, *ylm0, *ylmc, *zj, *zz, *zzg;
-  disort_pair *ab, *plk;
+  disort_pair *ab, *plk, *xr, *zee;
+  double bplanck = 0.;
+  double tplanck = 0.;
+  double *pkag = NULL;
 
   ipvt = (int *)pmalloc(ds->nstr * ds->nlyr * sizeof(int));
   layru = (int *)pmalloc(ds->ntau * sizeof(int));
@@ -326,8 +337,10 @@ DISPATCH_MACRO inline int c_fast_flux(disort_state *ds, disort_output *out)
   bdr = c_dbl_vector_uninitialized(
       0, ((ds->nstr / 2) + 1) * (ds->nstr / 2) - 1, "bdr");
   if constexpr (NSTR == 8) {
-    block_work = c_dbl_vector_uninitialized(
-        0, (3 * ds->nlyr - 2) * 64 - 1, "block_work");
+    if (!ds->flag.planck) {
+      block_work = c_dbl_vector_uninitialized(
+          0, (3 * ds->nlyr - 2) * 64 - 1, "block_work");
+    }
   }
   cc = c_dbl_vector_uninitialized(0, ds->nstr * ds->nstr - 1, "cc");
   ch = c_dbl_vector_uninitialized(0, ds->nlyr - 1, "ch");
@@ -353,6 +366,19 @@ DISPATCH_MACRO inline int c_fast_flux(disort_state *ds, disort_output *out)
   zz = c_dbl_vector_uninitialized(0, ds->nlyr * ds->nstr - 1, "zz");
   ab = (disort_pair *)pmalloc((ds->nstr / 2) * (ds->nstr / 2) *
                               sizeof(disort_pair));
+  xr = ds->flag.planck
+           ? (disort_pair *)pcalloc(ds->nlyr, sizeof(disort_pair))
+           : NULL;
+  zee = ds->flag.planck
+            ? (disort_pair *)pcalloc(ds->nstr, sizeof(disort_pair))
+            : NULL;
+  plk = ds->flag.planck
+            ? (disort_pair *)pcalloc(ds->nlyr * ds->nstr,
+                                     sizeof(disort_pair))
+            : NULL;
+  if (ds->flag.planck) {
+    pkag = c_dbl_vector_uninitialized(0, ds->nlyr, "pkag");
+  }
 
   TAUC(0) = 0.;
   abstau = 0.;
@@ -374,6 +400,15 @@ DISPATCH_MACRO inline int c_fast_flux(disort_state *ds, disort_output *out)
                utaupr, c_planck_func2);
   if (lyrcut) {
     memset(out->rad, 0, (size_t)ds->ntau * sizeof(disort_radiant));
+  }
+
+  if (ds->flag.planck) {
+    tplanck = c_planck_func2(ds->wvnmlo, ds->wvnmhi, ds->bc.ttemp) *
+              ds->bc.temis;
+    bplanck = c_planck_func2(ds->wvnmlo, ds->wvnmhi, ds->bc.btemp);
+    for (int lev = 0; lev <= ds->nlyr; ++lev) {
+      PKAG(lev) = c_planck_func2(ds->wvnmlo, ds->wvnmhi, TEMPER(lev));
+    }
   }
 
   delm0 = 1.;
@@ -407,16 +442,24 @@ DISPATCH_MACRO inline int c_fast_flux(disort_state *ds, disort_output *out)
       c_upbeam(ds, lc, array, cc, cmu, delm0, gl, ipvt, 0, nn, wk, ylm0,
                ylmc, zj, zz);
     }
+    if (ds->flag.planck) {
+      XR1(lc) = 0.;
+      if (DTAUCPR(lc) > 1.e-4) {
+        XR1(lc) = (PKAG(lc) - PKAG(lc - 1)) / DTAUCPR(lc);
+      }
+      XR0(lc) = PKAG(lc - 1) - XR1(lc) * TAUCPR(lc - 1);
+      c_upisot(ds, lc, array, cc, cmu, ipvt, nn, oprim, wk, xr, zee, plk);
+    }
   }
 
   if constexpr (NSTR == 8) {
-    if (!lyrcut && ncut == ds->nlyr) {
+    if (!ds->flag.planck && !lyrcut && ncut == ds->nlyr) {
       c_fast_flux_set_blocks8(ds, bdr, cmu, cwt, dtaucpr, gc, kk, ncut,
                               taucpr, wk, block_work);
       if (c_fast_flux_solve_blocks8(ds, b, bdr, cmu, cwt, expbea, ipvt, ll,
                                     ncut, zz, block_work)) {
         c_fast_fluxes(ds, out, cmu, cwt, gc, kk, layru, ll, lyrcut, ncut, nn,
-                      taucpr, utaupr, zz);
+                      taucpr, utaupr, zz, plk);
         return 0;
       }
     }
@@ -428,18 +471,20 @@ DISPATCH_MACRO inline int c_fast_flux(disort_state *ds, disort_output *out)
       for (int iq = 1; iq <= nn; ++iq) BEM(iq) = 1. - ds->bc.albedo;
     }
     zzg = c_dbl_vector(0, ds->nlyr * ds->nstr - 1, "zzg");
-    plk = (disort_pair *)pcalloc(ds->nlyr * ds->nstr,
-                                 sizeof(disort_pair));
-    cband = c_dbl_vector_uninitialized(
+    if (!ds->flag.planck) {
+      plk = (disort_pair *)pcalloc(ds->nlyr * ds->nstr,
+                                   sizeof(disort_pair));
+    }
+    cband = c_dbl_vector(
         0, ds->nstr * ds->nlyr * (9 * (ds->nstr / 2) - 2) - 1, "cband");
     c_set_matrix(ds, bdr, cband, cmu, cwt, delm0, dtaucpr, gc, kk, lyrcut,
                  &ncol, ncut, taucpr, wk);
-    c_solve0(ds, b, bdr, bem, 0., cband, cmu, cwt, expbea, ipvt, ll,
-             lyrcut, 0, ncol, ncut, nn, 0., taucpr, NULL, NULL, NULL, zz,
-             zzg, plk);
+    c_solve0(ds, b, bdr, bem, bplanck, cband, cmu, cwt, expbea, ipvt, ll,
+             lyrcut, 0, ncol, ncut, nn, tplanck, taucpr, NULL, NULL, NULL,
+             zz, zzg, plk);
   }
   c_fast_fluxes(ds, out, cmu, cwt, gc, kk, layru, ll, lyrcut, ncut, nn,
-                taucpr, utaupr, zz);
+                taucpr, utaupr, zz, plk);
 
   return 0;
 }

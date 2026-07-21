@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Run the FP64 one-column-per-thread solver benchmark and write a bar chart.
+"""Benchmark FP64 flux-only solvers with one CPU thread and CUDA.
 
-``EXOFMS_SOURCE_ROOT`` is optional.  When it names an Exo-FMS checkout, the
-script also compiles and measures its single-threaded Toon solvers.
+The shortwave and longwave cases both include scattering.  Set
+``EXOFMS_SOURCE_ROOT`` to an Exo-FMS column checkout to include its Fortran
+Toon solvers; pyharp Toon is included when it is importable.
 """
 
 from __future__ import annotations
@@ -21,11 +22,15 @@ import torch
 
 
 DTYPE = torch.float64
+MODES = ("shortwave", "longwave")
 PDISORT_STREAMS = (4, 8)
+WAVE_LOWER = [1000.0]
+WAVE_UPPER = [1100.0]
 
 
 @dataclass
 class Result:
+    mode: str
     solver: str
     device: str
     profiles: int
@@ -38,9 +43,15 @@ def parse_args() -> argparse.Namespace:
         "--profiles", type=int, nargs="+", default=(1000, 10000, 100000)
     )
     parser.add_argument("--layers", type=int, default=40)
+    parser.add_argument("--modes", choices=MODES, nargs="+", default=MODES)
     parser.add_argument("--warmup", type=int, default=3)
     parser.add_argument("--repeats", type=int, default=10)
     parser.add_argument("--output", type=Path, default=Path("benchmark-results"))
+    parser.add_argument(
+        "--results",
+        type=Path,
+        help="plot an existing JSON result file instead of running solvers",
+    )
     return parser.parse_args()
 
 
@@ -64,16 +75,71 @@ def time_call(call, device: torch.device, warmup: int, repeats: int) -> float:
     return (time.perf_counter() - start) / repeats
 
 
-def boundary_conditions(nprofile: int, device: torch.device) -> dict[str, torch.Tensor]:
+def scattering_properties(
+    nprofile: int, nlayer: int, nstr: int, device: torch.device
+) -> torch.Tensor:
     options = {"device": device, "dtype": DTYPE}
-    return {
-        "umu0": torch.full((nprofile,), 0.5, **options),
-        "fbeam": torch.ones((1, nprofile), **options),
-        "albedo": torch.full((1, nprofile), 0.1, **options),
-    }
+    prop = torch.empty((1, nprofile, nlayer, 2 + nstr), **options)
+    prop[..., 0] = 0.1
+    prop[..., 1] = 0.5
+    for moment in range(nstr):
+        prop[..., 2 + moment] = 0.5 ** (moment + 1)
+    return prop
+
+
+def inputs(
+    mode: str, nprofile: int, nlayer: int, nstr: int, device: torch.device
+) -> tuple[torch.Tensor, torch.Tensor | None, dict[str, torch.Tensor]]:
+    options = {"device": device, "dtype": DTYPE}
+    prop = scattering_properties(nprofile, nlayer, nstr, device)
+    if mode == "shortwave":
+        return (
+            prop,
+            None,
+            {
+                "umu0": torch.full((nprofile,), 0.5, **options),
+                "fbeam": torch.ones((1, nprofile), **options),
+                "albedo": torch.full((1, nprofile), 0.1, **options),
+            },
+        )
+
+    level = torch.arange(nlayer + 1, **options)
+    temperature = (300.0 - 0.5 * level).expand(nprofile, -1).contiguous()
+    return (
+        prop,
+        temperature,
+        {
+            "albedo": torch.full((1, nprofile), 0.1, **options),
+            "temis": torch.ones((1, nprofile), **options),
+            "btemp": temperature[:, 0],
+            "ttemp": temperature[:, -1],
+        },
+    )
+
+
+def pydisort_solver(mode: str, nprofile: int, nlayer: int, nstr: int):
+    try:
+        from pydisort.pydisort import Disort, DisortOptions
+    except ModuleNotFoundError:
+        from pydisort import Disort, DisortOptions
+
+    options = DisortOptions()
+    options.upward(True)
+    options.flags("onlyfl,lamber,quiet" + (",planck" if mode == "longwave" else ""))
+    options.nwave(1)
+    options.ncol(nprofile)
+    if mode == "longwave":
+        options.wave_lower(WAVE_LOWER)
+        options.wave_upper(WAVE_UPPER)
+    options.ds().nlyr = nlayer
+    options.ds().nstr = nstr
+    options.ds().nmom = nstr
+    options.ds().nphase = nstr
+    return Disort(options)
 
 
 def benchmark_pydisort(
+    mode: str,
     nprofile: int,
     nlayer: int,
     nstr: int,
@@ -81,48 +147,44 @@ def benchmark_pydisort(
     warmup: int,
     repeats: int,
 ) -> Result:
-    try:
-        from pydisort.pydisort import Disort, DisortOptions
-    except ModuleNotFoundError:
-        from pydisort import Disort, DisortOptions
+    solver = pydisort_solver(mode, nprofile, nlayer, nstr)
+    prop, temperature, bc = inputs(mode, nprofile, nlayer, nstr, device)
 
-    options = {"device": device, "dtype": DTYPE}
-    disort_options = DisortOptions()
-    disort_options.upward(True)
-    disort_options.flags("onlyfl,lamber,quiet")
-    disort_options.nwave(1)
-    disort_options.ncol(nprofile)
-    disort_options.ds().nlyr = nlayer
-    disort_options.ds().nstr = nstr
-    disort_options.ds().nmom = nstr
-    disort_options.ds().nphase = nstr
-    solver = Disort(disort_options)
-    prop = torch.empty((1, nprofile, nlayer, 2 + nstr), **options)
-    prop[..., 0] = 0.1
-    prop[..., 1] = 0.5
-    for moment in range(nstr):
-        prop[..., 2 + moment] = 0.5 ** (moment + 1)
-    bc = boundary_conditions(nprofile, device)
-    seconds = time_call(lambda: solver(prop, **bc), device, warmup, repeats)
+    def call():
+        if temperature is None:
+            return solver(prop, **bc)
+        return solver(prop, temf=temperature, **bc)
+
+    seconds = time_call(call, device, warmup, repeats)
     return Result(
-        f"pydisort DISORT {nstr}-stream", device.type.upper(), nprofile, seconds
+        mode, f"pydisort DISORT {nstr}-stream", device.type.upper(), nprofile, seconds
     )
 
 
 def benchmark_pyharp(
-    nprofile: int, nlayer: int, device: torch.device, warmup: int, repeats: int
+    mode: str,
+    nprofile: int,
+    nlayer: int,
+    device: torch.device,
+    warmup: int,
+    repeats: int,
 ) -> Result:
     import pyharp
 
-    options = {"device": device, "dtype": DTYPE}
-    solver = pyharp.ToonMcKay89(pyharp.ToonMcKay89Options())
-    prop = torch.empty((1, nprofile, nlayer, 3), **options)
-    prop[..., 0] = 0.1
-    prop[..., 1] = 0.5
-    prop[..., 2] = 0.5
-    bc = boundary_conditions(nprofile, device)
-    seconds = time_call(lambda: solver(prop, **bc), device, warmup, repeats)
-    return Result("pyharp Toon", device.type.upper(), nprofile, seconds)
+    toon_options = pyharp.ToonMcKay89Options()
+    if mode == "longwave":
+        toon_options.wave_lower(WAVE_LOWER)
+        toon_options.wave_upper(WAVE_UPPER)
+    solver = pyharp.ToonMcKay89(toon_options)
+    prop, temperature, bc = inputs(mode, nprofile, nlayer, 1, device)
+
+    def call():
+        if temperature is None:
+            return solver(prop[..., :3], **bc)
+        return solver(prop[..., :3], temf=temperature, **bc)
+
+    seconds = time_call(call, device, warmup, repeats)
+    return Result(mode, "pyharp Toon", device.type.upper(), nprofile, seconds)
 
 
 def benchmark_exofms(
@@ -144,28 +206,26 @@ def benchmark_exofms(
     )
     result = []
     current_profiles = None
+    fields_to_mode = {
+        "exofms_sw_toon_seconds": "shortwave",
+        "exofms_lw_toon_5node_seconds": "longwave",
+    }
     for line in completed.stdout.splitlines():
         fields = dict(item.split("=", 1) for item in line.split(",") if "=" in item)
         if "nprofile" in fields:
             current_profiles = int(fields["nprofile"])
-        elif current_profiles and "exofms_sw_toon_seconds" in fields:
-            result.append(
-                Result(
-                    "Exo-FMS SW Toon",
-                    "CPU",
-                    current_profiles,
-                    float(fields["exofms_sw_toon_seconds"]),
-                )
-            )
-        elif current_profiles and "exofms_lw_toon_5node_seconds" in fields:
-            result.append(
-                Result(
-                    "Exo-FMS LW Toon",
-                    "CPU",
-                    current_profiles,
-                    float(fields["exofms_lw_toon_5node_seconds"]),
-                )
-            )
+        elif current_profiles:
+            for field, mode in fields_to_mode.items():
+                if field in fields:
+                    result.append(
+                        Result(
+                            mode,
+                            "Fortran Toon",
+                            "CPU",
+                            current_profiles,
+                            float(fields[field]),
+                        )
+                    )
     if len(result) != 2 * len(profiles):
         raise RuntimeError(
             f"could not parse Exo-FMS benchmark output:\n{completed.stdout}"
@@ -173,55 +233,122 @@ def benchmark_exofms(
     return result
 
 
-def plot(results: list[Result], output: Path) -> None:
+def plot(results: list[Result], mode: str, output: Path) -> None:
     import matplotlib.pyplot as plt
+    from matplotlib.patches import Patch
 
-    series = list(dict.fromkeys((result.solver, result.device) for result in results))
-    solver_colors = {
-        name: index
-        for index, name in enumerate(dict.fromkeys(key[0] for key in series))
+    selected = [result for result in results if result.mode == mode]
+    profiles = sorted({result.profiles for result in selected})
+    solver_order = [
+        "Fortran Toon",
+        "pyharp Toon",
+        "pydisort DISORT 4-stream",
+        "pydisort DISORT 8-stream",
+    ]
+    solvers = [
+        solver
+        for solver in solver_order
+        if any(result.solver == solver for result in selected)
+    ]
+    styles = {
+        ("Fortran Toon", "CPU"): ("#7f7f7f", ""),
+        ("pyharp Toon", "CPU"): ("#3f7fbd", ""),
+        ("pyharp Toon", "CUDA"): ("#1f5b99", "//"),
+        ("pydisort DISORT 4-stream", "CPU"): ("#f3c984", ""),
+        ("pydisort DISORT 4-stream", "CUDA"): ("#e88914", "//"),
+        ("pydisort DISORT 8-stream", "CPU"): ("#e6a09b", ""),
+        ("pydisort DISORT 8-stream", "CUDA"): ("#c84b47", "//"),
     }
-    profiles = sorted({result.profiles for result in results})
-    colors = plt.get_cmap("tab10").colors
     figure, axes = plt.subplots(
-        1, len(profiles), figsize=(4 * len(profiles), 4), sharey=True
+        1, len(profiles), figsize=(4.3 * len(profiles), 4.2), sharey=True
     )
     axes = (axes,) if len(profiles) == 1 else axes
     for axis, nprofile in zip(axes, profiles):
-        values = [
-            next(
-                (
-                    1e6 * item.seconds / item.profiles
-                    for item in results
-                    if (item.solver, item.device) == key and item.profiles == nprofile
-                ),
-                None,
+        positions = []
+        values = []
+        bar_colors = []
+        hatches = []
+        for index, solver in enumerate(solvers):
+            devices = [
+                device
+                for device in ("CPU", "CUDA")
+                if any(
+                    result.profiles == nprofile
+                    and result.solver == solver
+                    and result.device == device
+                    for result in selected
+                )
+            ]
+            offsets = (
+                {"CPU": -0.19, "CUDA": 0.19} if len(devices) == 2 else {devices[0]: 0.0}
             )
-            for key in series
-        ]
-        positions = [index for index, value in enumerate(values) if value is not None]
+            for device in devices:
+                value = next(
+                    1e6 * result.seconds / result.profiles
+                    for result in selected
+                    if result.profiles == nprofile
+                    and result.solver == solver
+                    and result.device == device
+                )
+                positions.append(index + offsets[device])
+                values.append(value)
+                color, hatch = styles[(solver, device)]
+                bar_colors.append(color)
+                hatches.append(hatch)
         bars = axis.bar(
             positions,
-            [values[index] for index in positions],
-            color=[
-                colors[solver_colors[series[index][0]] % len(colors)]
-                for index in positions
-            ],
-            hatch=["//" if series[index][1] == "CPU" else "" for index in positions],
+            values,
+            width=0.34,
+            color=bar_colors,
+            edgecolor="#333333",
+            linewidth=0.5,
         )
-        axis.bar_label(bars, fmt="%.2g", padding=2, fontsize=8)
+        for bar, hatch in zip(bars, hatches):
+            bar.set_hatch(hatch)
+        axis.bar_label(
+            bars, labels=[f"{value:.2g}" for value in values], padding=2, fontsize=8
+        )
         axis.set_title(f"{nprofile:,} profiles")
         axis.set_xticks(
-            positions,
-            [f"{series[index][0]}\n{series[index][1]}" for index in positions],
-            rotation=35,
-            ha="right",
+            range(len(solvers)),
+            [
+                solver.replace("pydisort ", "").replace(" ", "\n", 1)
+                for solver in solvers
+            ],
+            fontsize=8,
         )
-        axis.grid(axis="y", alpha=0.25)
+        axis.grid(axis="y", color="#d0d0d0", linewidth=0.6)
+        axis.set_axisbelow(True)
     axes[0].set_ylabel("time per profile (µs, log scale)")
     axes[0].set_yscale("log")
-    figure.tight_layout()
-    figure.savefig(output / "fp64_solver_benchmark.png", dpi=200)
+    figure.suptitle(f"FP64 {mode} scattering, 40 layers, one CPU thread", y=0.99)
+    figure.legend(
+        handles=[
+            *[
+                Patch(
+                    facecolor=styles[(solver, device)][0],
+                    edgecolor="#333333",
+                    hatch=styles[(solver, device)][1],
+                    label=f"{solver.replace('pydisort ', '')} ({device})",
+                )
+                for solver in solvers
+                for device in ("CPU", "CUDA")
+                if (solver, device) in styles
+            ],
+        ],
+        loc="lower center",
+        ncol=3,
+        frameon=False,
+        bbox_to_anchor=(0.5, -0.27),
+    )
+    figure.tight_layout(rect=(0.02, 0.04, 1.0, 0.94))
+    figure.savefig(
+        output / f"fp64_{mode}_solver_benchmark.png",
+        dpi=240,
+        bbox_inches="tight",
+        pad_inches=0.16,
+    )
+    plt.close(figure)
 
 
 def main() -> None:
@@ -229,37 +356,54 @@ def main() -> None:
     if min(*args.profiles, args.layers, args.repeats) < 1 or args.warmup < 0:
         raise ValueError("profiles, layers, and repeats must be positive")
 
+    if args.results:
+        with args.results.open() as stream:
+            results = [Result(**row) for row in json.load(stream)]
+        args.output.mkdir(parents=True, exist_ok=True)
+        for mode in args.modes:
+            if any(result.mode == mode for result in results):
+                plot(results, mode, args.output)
+        return
+
     torch.set_num_threads(1)
     devices = [torch.device("cpu")]
     if torch.cuda.is_available():
         devices.append(torch.device("cuda"))
     results = []
-    for nprofile in args.profiles:
-        for device in devices:
-            for nstr in PDISORT_STREAMS:
-                results.append(
-                    benchmark_pydisort(
-                        nprofile,
-                        args.layers,
-                        nstr,
-                        device,
-                        args.warmup,
-                        args.repeats,
+    for mode in args.modes:
+        for nprofile in args.profiles:
+            for device in devices:
+                for nstr in PDISORT_STREAMS:
+                    results.append(
+                        benchmark_pydisort(
+                            mode,
+                            nprofile,
+                            args.layers,
+                            nstr,
+                            device,
+                            args.warmup,
+                            args.repeats,
+                        )
                     )
-                )
 
     try:
         import pyharp  # noqa: F401
     except ImportError:
         print("pyharp not found; skipping pyharp Toon")
     else:
-        for nprofile in args.profiles:
-            for device in devices:
-                results.append(
-                    benchmark_pyharp(
-                        nprofile, args.layers, device, args.warmup, args.repeats
+        for mode in args.modes:
+            for nprofile in args.profiles:
+                for device in devices:
+                    results.append(
+                        benchmark_pyharp(
+                            mode,
+                            nprofile,
+                            args.layers,
+                            device,
+                            args.warmup,
+                            args.repeats,
+                        )
                     )
-                )
 
     exofms_root = os.environ.get("EXOFMS_SOURCE_ROOT")
     exofms_files = ("src/WENO4_mod.f90", "src/sw_Toon_mod.f90", "src/lw_Toon_mod.f90")
@@ -275,7 +419,7 @@ def main() -> None:
         )
     else:
         print(
-            "Exo-FMS Toon sources or Fortran compiler not found; skipping Exo-FMS Toon"
+            "Exo-FMS Toon sources or Fortran compiler not found; skipping Fortran Toon"
         )
 
     args.output.mkdir(parents=True, exist_ok=True)
@@ -285,10 +429,11 @@ def main() -> None:
         writer = csv.DictWriter(stream, fieldnames=Result.__annotations__)
         writer.writeheader()
         writer.writerows(asdict(result) for result in results)
-    plot(results, args.output)
+    for mode in args.modes:
+        plot(results, mode, args.output)
     for result in results:
         print(
-            f"{result.solver:24s} {result.device:4s} {result.profiles:7d} {1e6 * result.seconds / result.profiles:10.3f} µs/profile"
+            f"{result.mode:9s} {result.solver:24s} {result.device:4s} {result.profiles:7d} {1e6 * result.seconds / result.profiles:10.3f} µs/profile"
         )
 
 

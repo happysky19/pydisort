@@ -26,16 +26,14 @@ DISPATCH_MACRO void disort_impl(T *flx, T *prop, T *umu0, T *phi0, T *fbeam,
                                 disort_state &ds, disort_output &ds_out,
                                 int nprop) {
   // run disort
-  if constexpr (FastFluxNstr == 0) {
-    if (ds.flag.planck) {
-      if (upward) {
-        for (int i = 0; i <= ds.nlyr; ++i) {
-          ds.temper[ds.nlyr - i] = TEMF(i);
-        }
-      } else {
-        for (int i = 0; i <= ds.nlyr; ++i) {
-          ds.temper[i] = TEMF(i);
-        }
+  if (ds.flag.planck) {
+    if (upward) {
+      for (int i = 0; i <= ds.nlyr; ++i) {
+        ds.temper[ds.nlyr - i] = TEMF(i);
+      }
+    } else {
+      for (int i = 0; i <= ds.nlyr; ++i) {
+        ds.temper[i] = TEMF(i);
       }
     }
   }

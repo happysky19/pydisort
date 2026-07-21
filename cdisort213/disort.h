@@ -571,16 +571,7 @@ DISPATCH_MACRO inline int c_disort(disort_state  *ds,
   }
   bdr     = c_dbl_vector(0,((ds->nstr/2)+1)*(ds->nstr/2)-1,"bdr");
   bem     = c_dbl_vector(0,(ds->nstr/2)-1,"bem");
-#ifdef __CUDA_ARCH__
-  if (ds->flag.onlyfl) {
-    cband = c_dbl_vector_uninitialized(
-        0,ds->nstr*ds->nlyr*(9*(ds->nstr/2)-2)-1,"cband");
-  }
-  else
-#endif
-  {
-    cband = c_dbl_vector(0,ds->nstr*ds->nlyr*(9*(ds->nstr/2)-2)-1,"cband");
-  }
+  cband = c_dbl_vector(0,ds->nstr*ds->nlyr*(9*(ds->nstr/2)-2)-1,"cband");
   cc      = c_dbl_vector(0,ds->nstr*ds->nstr-1,"cc");
   ch      = c_dbl_vector(0,ds->nlyr-1,"ch");
   chtau   = c_dbl_vector(0,(2*ds->nlyr+1)-1,"chtau");
