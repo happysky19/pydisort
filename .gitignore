@@ -97,6 +97,7 @@ z.junk
 
 # cache
 .cache
+benchmark-results/
 
 # version file
 src/version.h

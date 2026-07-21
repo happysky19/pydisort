@@ -236,6 +236,7 @@
 #include "self_test.h"
 #include "twostr.h"
 #include "disort.h"
+#include "fast_flux.h"
 
 #if defined(__CUDA_ARCH__)
 #undef fprintf

@@ -164,7 +164,8 @@ typedef struct disort_state {
     ntau,      /* Number of computational optical depths                               */
     numu,      /* Number of computational polar angles                                 */
     nphi,      /* Number of azimuthal angles at which to return intensities            */
-    nphase;    /* number of angles (grid points)                                       */
+    nphase,    /* number of angles (grid points)                                       */
+    fast_flux; /* internal flag for the reduced flux-only CUDA path                    */
   double
     wvnmlo,    /* Wavenumber [cm^-1] lower range, used for Planck function             */
     wvnmhi,    /* Wavenumber [cm^-1] upper range, used for Planck function             */

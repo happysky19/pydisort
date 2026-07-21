@@ -65,11 +65,13 @@ DISPATCH_MACRO inline size_t c_disort_work_size(disort_state const *ds)
 
   /* --- c_disort_out_alloc --- */
   n_rad += ntau;                               /* rad           */
-  n_dbl += nphi * numu * ntau + 1;             /* uu            */
-  n_dbl += ntau * numu + 1;                    /* u0u           */
+  if (!ds->flag.onlyfl) {
+    n_dbl += nphi * numu * ntau + 1;           /* uu            */
+    n_dbl += ntau * numu + 1;                  /* u0u           */
+  }
   if (ds->flag.output_uum) n_dbl += nstr * numu * ntau + 1; /* uum */
   if (ds->flag.ibcnd == SPECIAL_BC) n_dbl += 2 * (numu + 1); /* albmed, trnmed */
-  nblocks += 6;
+  nblocks += ds->flag.onlyfl ? 4 : 6;
 
   /* --- c_disort work arrays (general case) --- */
   n_int += nstr * nlyr + ntau;                 /* ipvt, layru   */
@@ -848,11 +850,14 @@ DISPATCH_MACRO inline int c_disort(disort_state  *ds,
 
     if (ds->flag.onlyfl) {
       /*
-       * Save azimuthal-avg intensities at quadrature angles
+       * Save azimuthal-avg intensities at quadrature angles when the output
+       * buffer is allocated. CUDA flux-only calls do not expose this output.
        */
-      for (lu = 1; lu <= ds->ntau; lu++) {
-        for (iq = 1; iq <= ds->nstr; iq++) {
-          U0U(iq,lu) = U0C(iq,lu);
+      if (out->u0u != NULL) {
+        for (lu = 1; lu <= ds->ntau; lu++) {
+          for (iq = 1; iq <= ds->nstr; iq++) {
+            U0U(iq,lu) = U0C(iq,lu);
+          }
         }
       }
       break;
@@ -1015,4 +1020,3 @@ DISPATCH_MACRO inline int c_disort(disort_state  *ds,
 }
 
 /*============================= end of c_disort() =======================*/
-

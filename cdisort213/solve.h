@@ -850,6 +850,352 @@ DISPATCH_MACRO inline void c_solve_eigen(disort_state *ds,
 
 /*============================= end of c_solve_eigen() ==================*/
 
+DISPATCH_MACRO inline void c_solve_eigen4(disort_state *ds,
+                                          int lc,
+                                          disort_pair *ab,
+                                          double *array,
+                                          double *cmu,
+                                          double *cwt,
+                                          double *gl,
+                                          double *ylmc,
+                                          double *cc,
+                                          double *evecc,
+                                          double *eval,
+                                          double *kk,
+                                          double *gc,
+                                          double *wk)
+{
+  int ier;
+  for (int iq = 0; iq < 2; ++iq) {
+    for (int jq = 0; jq < 4; ++jq) {
+      double sum = 0.;
+      for (int l = 0; l < 4; ++l) {
+        sum += gl[l + (lc - 1) * 5] * ylmc[l + iq * 5] *
+               ylmc[l + jq * 5];
+      }
+      cc[iq + jq * 4] = .5 * sum * cwt[jq];
+    }
+    for (int jq = 0; jq < 2; ++jq) {
+      cc[iq + 2 + jq * 4] = cc[iq + (jq + 2) * 4];
+      cc[iq + 2 + (jq + 2) * 4] = cc[iq + jq * 4];
+      double alpha = cc[iq + jq * 4] / cmu[iq];
+      double beta = cc[iq + (jq + 2) * 4] / cmu[iq];
+      ab[iq + jq * 2].zero = alpha - beta;
+      ab[iq + jq * 2].one = alpha + beta;
+    }
+    ab[iq + iq * 2].zero -= 1. / cmu[iq];
+    ab[iq + iq * 2].one -= 1. / cmu[iq];
+  }
+
+  for (int iq = 0; iq < 2; ++iq) {
+    for (int jq = 0; jq < 2; ++jq) {
+      double sum = 0.;
+      for (int kq = 0; kq < 2; ++kq) {
+        sum += ab[iq + kq * 2].one * ab[kq + jq * 2].zero;
+      }
+      array[iq + jq * 2] = sum;
+    }
+  }
+
+  c_asymmetric_matrix(array, evecc, eval, 2, 2, 4, &ier, wk);
+  if (ier > 0) {
+    fprintf(stderr,
+            "\n\n asymmetric_matrix--eigenvalue no. %4d didn't converge.  "
+            "Lower-numbered eigenvalues wrong.\n",
+            ier);
+    c_errmsg("asymmetric_matrix--convergence problems", DS_ERROR);
+  }
+
+  for (int iq = 0; iq < 2; ++iq) {
+    eval[iq] = sqrt(fabs(eval[iq]));
+    kk[iq + 2 + (lc - 1) * 4] = eval[iq];
+    kk[1 - iq + (lc - 1) * 4] = -eval[iq];
+  }
+
+  for (int jq = 0; jq < 2; ++jq) {
+    for (int iq = 0; iq < 2; ++iq) {
+      double sum = 0.;
+      for (int kq = 0; kq < 2; ++kq) {
+        sum += ab[iq + kq * 2].zero * evecc[kq + jq * 4];
+      }
+      ab[iq + jq * 2].one = sum / eval[jq];
+    }
+  }
+
+  for (int jq = 0; jq < 2; ++jq) {
+    for (int iq = 0; iq < 2; ++iq) {
+      double gpplgm = ab[iq + jq * 2].one;
+      double gpmigm = evecc[iq + jq * 4];
+      evecc[iq + jq * 4] = .5 * (gpplgm + gpmigm);
+      evecc[iq + 2 + jq * 4] = .5 * (gpplgm - gpmigm);
+      gpplgm *= -1.;
+      evecc[iq + (jq + 2) * 4] = .5 * (gpplgm + gpmigm);
+      evecc[iq + 2 + (jq + 2) * 4] = .5 * (gpplgm - gpmigm);
+      gc[2 + iq + (2 + jq + (lc - 1) * 4) * 4] =
+          evecc[iq + jq * 4];
+      gc[1 - iq + (2 + jq + (lc - 1) * 4) * 4] =
+          evecc[iq + 2 + jq * 4];
+      gc[2 + iq + (1 - jq + (lc - 1) * 4) * 4] =
+          evecc[iq + (jq + 2) * 4];
+      gc[1 - iq + (1 - jq + (lc - 1) * 4) * 4] =
+          evecc[iq + 2 + (jq + 2) * 4];
+    }
+  }
+}
+
+DISPATCH_MACRO inline void c_solve_eigen8(disort_state *ds,
+                                          int lc,
+                                          disort_pair *ab,
+                                          double *array,
+                                          double *cmu,
+                                          double *cwt,
+                                          double *gl,
+                                          double *ylmc,
+                                          double *cc,
+                                          double *evecc,
+                                          double *eval,
+                                          double *kk,
+                                          double *gc,
+                                          double *wk)
+{
+  int ier;
+  for (int iq = 0; iq < 4; ++iq) {
+    for (int jq = 0; jq < 8; ++jq) {
+      double sum = 0.;
+      for (int l = 0; l < 8; ++l) {
+        sum += gl[l + (lc - 1) * 9] * ylmc[l + iq * 9] *
+               ylmc[l + jq * 9];
+      }
+      cc[iq + jq * 8] = .5 * sum * cwt[jq];
+    }
+    for (int jq = 0; jq < 4; ++jq) {
+      cc[iq + 4 + jq * 8] = cc[iq + (jq + 4) * 8];
+      cc[iq + 4 + (jq + 4) * 8] = cc[iq + jq * 8];
+      double alpha = cc[iq + jq * 8] / cmu[iq];
+      double beta = cc[iq + (jq + 4) * 8] / cmu[iq];
+      ab[iq + jq * 4].zero = alpha - beta;
+      ab[iq + jq * 4].one = alpha + beta;
+    }
+    ab[iq + iq * 4].zero -= 1. / cmu[iq];
+    ab[iq + iq * 4].one -= 1. / cmu[iq];
+  }
+
+  for (int iq = 0; iq < 4; ++iq) {
+    for (int jq = 0; jq < 4; ++jq) {
+      double sum = 0.;
+      for (int kq = 0; kq < 4; ++kq) {
+        sum += ab[iq + kq * 4].one * ab[kq + jq * 4].zero;
+      }
+      array[iq + jq * 4] = sum;
+    }
+  }
+
+  c_asymmetric_matrix(array, evecc, eval, 4, 4, 8, &ier, wk);
+  if (ier > 0) {
+    fprintf(stderr,
+            "\n\n asymmetric_matrix--eigenvalue no. %4d didn't converge.  "
+            "Lower-numbered eigenvalues wrong.\n",
+            ier);
+    c_errmsg("asymmetric_matrix--convergence problems", DS_ERROR);
+  }
+
+  for (int iq = 0; iq < 4; ++iq) {
+    eval[iq] = sqrt(fabs(eval[iq]));
+    kk[iq + 4 + (lc - 1) * 8] = eval[iq];
+    kk[3 - iq + (lc - 1) * 8] = -eval[iq];
+  }
+
+  for (int jq = 0; jq < 4; ++jq) {
+    for (int iq = 0; iq < 4; ++iq) {
+      double sum = 0.;
+      for (int kq = 0; kq < 4; ++kq) {
+        sum += ab[iq + kq * 4].zero * evecc[kq + jq * 8];
+      }
+      ab[iq + jq * 4].one = sum / eval[jq];
+    }
+  }
+  for (int jq = 0; jq < 4; ++jq) {
+    for (int iq = 0; iq < 4; ++iq) {
+      double gpplgm = ab[iq + jq * 4].one;
+      double gpmigm = evecc[iq + jq * 8];
+      evecc[iq + jq * 8] = .5 * (gpplgm + gpmigm);
+      evecc[iq + 4 + jq * 8] = .5 * (gpplgm - gpmigm);
+      gpplgm *= -1.;
+      evecc[iq + (jq + 4) * 8] = .5 * (gpplgm + gpmigm);
+      evecc[iq + 4 + (jq + 4) * 8] = .5 * (gpplgm - gpmigm);
+      gc[4 + iq + (4 + jq + (lc - 1) * 8) * 8] =
+          evecc[iq + jq * 8];
+      gc[3 - iq + (4 + jq + (lc - 1) * 8) * 8] =
+          evecc[iq + 4 + jq * 8];
+      gc[4 + iq + (3 - jq + (lc - 1) * 8) * 8] =
+          evecc[iq + (jq + 4) * 8];
+      gc[3 - iq + (3 - jq + (lc - 1) * 8) * 8] =
+          evecc[iq + 4 + (jq + 4) * 8];
+    }
+  }
+}
+
+/* The nstr=8 flux-only boundary system is block tridiagonal by layer. */
+DISPATCH_MACRO inline int c_solve_block_tridiag8(double const *cband,
+                                                   int nblock, double *b,
+                                                   int *ipvt,
+                                                   double *work)
+{
+  double *diag = work;
+  double *lower = diag + nblock * 64;
+  double *upper = lower + (nblock - 1) * 64;
+  const int lda = 34;
+  const int middle = 23;
+
+  for (int block = 0; block < nblock; ++block) {
+    double *d = diag + block * 64;
+    for (int j = 0; j < 8; ++j) {
+      int col = block * 8 + j + 1;
+      for (int i = 0; i < 8; ++i) {
+        int row = block * 8 + i + 1;
+        int band_row = row - col + middle;
+        d[i + j * 8] = (band_row >= 1 && band_row <= lda)
+                           ? cband[(band_row - 1) + (col - 1) * lda]
+                           : 0.;
+      }
+    }
+    if (block > 0) {
+      double *l = lower + (block - 1) * 64;
+      for (int j = 0; j < 8; ++j) {
+        int col = (block - 1) * 8 + j + 1;
+        for (int i = 0; i < 8; ++i) {
+          int row = block * 8 + i + 1;
+          int band_row = row - col + middle;
+          l[i + j * 8] = (band_row >= 1 && band_row <= lda)
+                             ? cband[(band_row - 1) + (col - 1) * lda]
+                             : 0.;
+        }
+      }
+    }
+    if (block + 1 < nblock) {
+      double *u = upper + block * 64;
+      for (int j = 0; j < 8; ++j) {
+        int col = (block + 1) * 8 + j + 1;
+        for (int i = 0; i < 8; ++i) {
+          int row = block * 8 + i + 1;
+          int band_row = row - col + middle;
+          u[i + j * 8] = (band_row >= 1 && band_row <= lda)
+                             ? cband[(band_row - 1) + (col - 1) * lda]
+                             : 0.;
+        }
+      }
+    }
+  }
+
+  for (int block = 0; block + 1 < nblock; ++block) {
+    double *d = diag + block * 64;
+    double *u = upper + block * 64;
+    double *next_d = diag + (block + 1) * 64;
+    double *l = lower + block * 64;
+    double *rhs = b + block * 8;
+    double *next_rhs = rhs + 8;
+    int info;
+    c_sgefa(d, 8, 8, ipvt + block * 8, &info);
+    if (info != 0) return FALSE;
+    c_sgesl(d, 8, 8, ipvt + block * 8, rhs, 0);
+    for (int j = 0; j < 8; ++j) {
+      c_sgesl(d, 8, 8, ipvt + block * 8, u + j * 8, 0);
+    }
+
+    for (int j = 0; j < 8; ++j) {
+      for (int i = 0; i < 8; ++i) {
+        double value = 0.;
+        for (int k = 0; k < 8; ++k) value += l[i + k * 8] * u[k + j * 8];
+        next_d[i + j * 8] -= value;
+      }
+    }
+    for (int i = 0; i < 8; ++i) {
+      double value = 0.;
+      for (int k = 0; k < 8; ++k) value += l[i + k * 8] * rhs[k];
+      next_rhs[i] -= value;
+    }
+  }
+
+  int last = nblock - 1;
+  int info;
+  c_sgefa(diag + last * 64, 8, 8, ipvt + last * 8, &info);
+  if (info != 0) return FALSE;
+  c_sgesl(diag + last * 64, 8, 8, ipvt + last * 8, b + last * 8, 0);
+
+  for (int block = nblock - 2; block >= 0; --block) {
+    double *rhs = b + block * 8;
+    double const *u = upper + block * 64;
+    double const *next_rhs = rhs + 8;
+    for (int i = 0; i < 8; ++i) {
+      double value = 0.;
+      for (int j = 0; j < 8; ++j) value += u[i + j * 8] * next_rhs[j];
+      rhs[i] -= value;
+    }
+  }
+
+  return TRUE;
+}
+
+/* Solve an nstr=8 block-tridiagonal system already stored as contiguous
+ * diagonal, lower, and upper eight-by-eight blocks. */
+DISPATCH_MACRO inline int c_solve_block_tridiag8_blocks(int nblock,
+                                                          double *b,
+                                                          int *ipvt,
+                                                          double *work)
+{
+  double *diag = work;
+  double *lower = diag + nblock * 64;
+  double *upper = lower + (nblock - 1) * 64;
+
+  for (int block = 0; block + 1 < nblock; ++block) {
+    double *d = diag + block * 64;
+    double *u = upper + block * 64;
+    double *next_d = diag + (block + 1) * 64;
+    double *l = lower + block * 64;
+    double *rhs = b + block * 8;
+    double *next_rhs = rhs + 8;
+    int info;
+    c_sgefa(d, 8, 8, ipvt + block * 8, &info);
+    if (info != 0) return FALSE;
+    c_sgesl(d, 8, 8, ipvt + block * 8, rhs, 0);
+    for (int j = 0; j < 8; ++j) {
+      c_sgesl(d, 8, 8, ipvt + block * 8, u + j * 8, 0);
+    }
+
+    for (int j = 0; j < 8; ++j) {
+      for (int i = 0; i < 8; ++i) {
+        double value = 0.;
+        for (int k = 0; k < 8; ++k) value += l[i + k * 8] * u[k + j * 8];
+        next_d[i + j * 8] -= value;
+      }
+    }
+    for (int i = 0; i < 8; ++i) {
+      double value = 0.;
+      for (int k = 0; k < 8; ++k) value += l[i + k * 8] * rhs[k];
+      next_rhs[i] -= value;
+    }
+  }
+
+  int last = nblock - 1;
+  int info;
+  c_sgefa(diag + last * 64, 8, 8, ipvt + last * 8, &info);
+  if (info != 0) return FALSE;
+  c_sgesl(diag + last * 64, 8, 8, ipvt + last * 8, b + last * 8, 0);
+
+  for (int block = nblock - 2; block >= 0; --block) {
+    double *rhs = b + block * 8;
+    double const *u = upper + block * 64;
+    double const *next_rhs = rhs + 8;
+    for (int i = 0; i < 8; ++i) {
+      double value = 0.;
+      for (int j = 0; j < 8; ++j) value += u[i + j * 8] * next_rhs[j];
+      rhs[i] -= value;
+    }
+  }
+
+  return TRUE;
+}
+
 /*============================= c_solve0() ==============================*/
 
 /*
@@ -928,11 +1274,14 @@ DISPATCH_MACRO inline void c_solve0(disort_state *ds,
               disort_pair  *plk)
 {
   int
-    ipnt,iq,it,jq,lc,ncd;
-  double
-    rcond,sum,diff;
+    ipnt,iq,it,jq,lc,ncd,solved_by_blocks;
+  double sum,diff;
+#ifndef __CUDA_ARCH__
+  double rcond;
+#endif
   
   memset(b,0,ds->nstr*ds->nlyr*sizeof(double));
+  solved_by_blocks = FALSE;
   
   /*
    * Construct B, STWJ(20a,c) for parallel beam+bottom
@@ -1190,16 +1539,37 @@ DISPATCH_MACRO inline void c_solve0(disort_state *ds,
   }
 
   /*
-   * Find L-U (lower/upper triangular) decomposition of band matrix
-   * CBAND and test if it is nearly singular (note: CBAND is
-   * destroyed) (CBAND is in LINPACK packed format)
+   * Find the L-U decomposition of the band matrix CBAND.  The CUDA path
+   * omits the condition-number estimate because it is only diagnostic.
    */
-  rcond = 0.;
   ncd   = 3*nn-1;
-  c_sgbco(cband,(9*(ds->nstr/2)-2),ncol,ncd,ncd,ipvt,&rcond,z);
+  if (ds->fast_flux && ds->nstr == 8 && ncol % 8 == 0) {
+    int nblock = ncol / 8;
+    size_t nwork = (size_t)(3 * nblock - 2) * 64;
+    double *block_work =
+        (double *)pmalloc((nwork + (size_t)ncol) * sizeof(double));
+    double *saved_b = block_work + nwork;
+    memcpy(saved_b, b, ncol * sizeof(double));
+    solved_by_blocks = c_solve_block_tridiag8(cband, nblock, b, ipvt,
+                                               block_work);
+    if (!solved_by_blocks) memcpy(b, saved_b, ncol * sizeof(double));
+  }
+  if (!solved_by_blocks) {
+#ifdef __CUDA_ARCH__
+    int info;
+    c_sgbfa(cband, (9 * (ds->nstr / 2) - 2), ncol, ncd, ncd, ipvt,
+            &info);
+    if (info != 0) {
+      c_errmsg("solve0--sgbfa says matrix is singular",DS_WARNING);
+    }
+#else
+    rcond = 0.;
+    c_sgbco(cband,(9*(ds->nstr/2)-2),ncol,ncd,ncd,ipvt,&rcond,z);
 
-  if (1.+rcond == 1.) {
-    c_errmsg("solve0--sgbco says matrix near singular",DS_WARNING);
+    if (1.+rcond == 1.) {
+      c_errmsg("solve0--sgbco says matrix near singular",DS_WARNING);
+    }
+#endif
   }
 
   /*
@@ -1207,13 +1577,22 @@ DISPATCH_MACRO inline void c_solve0(disort_state *ds,
    * after CBAND has been L-U decomposed. Solution is returned in B.
    */
 
-  c_sgbsl(cband,(9*(ds->nstr/2)-2),ncol,ncd,ncd,ipvt,b,0);
+  if (!solved_by_blocks) {
+#ifdef __CUDA_ARCH__
+    c_sgbsl(cband, (9 * (ds->nstr / 2) - 2), ncol, ncd, ncd, ipvt, b, 0);
+#else
+    c_sgbsl(cband,(9*(ds->nstr/2)-2),ncol,ncd,ncd,ipvt,b,0);
+#endif
+  }
 
   /*
    * Zero CBAND (it may contain 'foreign' elements upon returning from
-   * LINPACK); necessary to prevent errors
+   * LINPACK) before another azimuthal component reuses it.  Flux-only
+   * solves exit after this component and do not reuse the matrix.
    */
-  memset(cband,0,(9*(ds->nstr/2)-2)*(ds->nstr*ds->nlyr)*sizeof(double));
+  if (!ds->flag.onlyfl) {
+    memset(cband,0,(9*(ds->nstr/2)-2)*(ds->nstr*ds->nlyr)*sizeof(double));
+  }
 
   for (lc = 1; lc <= ncut; lc++) {
     ipnt = lc*ds->nstr-nn;
@@ -1313,4 +1692,3 @@ DISPATCH_MACRO inline void c_solve1(disort_state *ds,
 }
 
 /*============================= end of c_solve1() ========================*/
-

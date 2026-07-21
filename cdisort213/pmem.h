@@ -1,37 +1,9 @@
 /* pmem.h -- pool-aware allocation wrappers for cdisort.
  *
- * The cdisort impl headers allocate work memory through pmalloc/pcalloc/
- * pfree instead of malloc/calloc/free so that the same code can run on
- * both trajectories:
- *
- *   host    -> plain libc malloc/calloc/free (bit-identical to the
- *              original cdisort.c behavior)
- *   device  -> a per-thread bump-pointer pool carved out of one workspace
- *              buffer, so that c_disort can run natively inside a CUDA
- *              kernel (one thread = one radiative-transfer column)
- *
- * The device pool is a bump allocator, not a general-purpose free-list
- * allocator: c_disort (and its callees) always allocate their ~70 work
- * buffers up front and free them all together at the very end of the
- * call (or on an early return) -- there is no interleaved free+realloc
- * that would need reclaimed space mid-call. And since pool_init() wipes
- * a thread's whole slice before the *next* element runs, an individual
- * pfree() has nothing to reclaim before that reset happens anyway. So
- * pfree() is a no-op on the device trajectory, and pmalloc()/pcalloc()
- * just advance a cursor -- no header/footer bookkeeping, no free-list
- * search, no coalescing. This also shrinks the per-thread workspace
- * budget (see c_disort_work_size in disort.h), since there's no
- * per-allocation overhead to reserve beyond 8-byte alignment padding.
- *
- * Everything here is header-only on purpose: the Python-extension CUDA
- * build compiles without relocatable device code, so the __device__
- * globals below are TU-local (static) and must be bound (bind_workspace)
- * from the same translation unit that launches the kernels.  Every
- * helper below is static for the same reason: if this header is ever
- * included from more than one CUDA translation unit, an external-linkage
- * inline helper would be deduplicated across units by the linker while
- * still referring to one unit's copy of the globals -- binding the
- * workspace in one unit and trapping "workspace not bound" in another.
+ * Host code uses libc allocation. CUDA code uses one bump-pointer slice per
+ * solver thread; pool_init() resets the slice for each element, so pfree() is
+ * a no-op on the device. The device globals are TU-local because the launcher
+ * and bind_workspace() must refer to the same copy.
  */
 #ifndef __cdisort_pmem_h
 #define __cdisort_pmem_h

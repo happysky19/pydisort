@@ -23,17 +23,15 @@ __global__ void element_kernel(int64_t numel, func_t f) {
   }
 }
 
-// Chunked variant for element functions that need a per-thread work pool.
-// The iteration range is split only
-// when one workspace of work_size bytes per *concurrent* thread would exceed
-// half of the free device memory.  A DisortImpl-owned workspace is grown on
-// demand and reused across forwards.  The workspace is bound to this
-// translation unit's pmem per-thread pool globals; the element lambda is
-// expected to call pmem::pool_init() before its first pmalloc.
+// Chunked variant for element functions with a per-thread work pool. The
+// DisortImpl-owned workspace grows on demand and is reused across forwards.
 template <int Arity, typename func_t>
 void gpu_chunk_kernel(at::TensorIterator& iter, size_t work_size,
                       at::Tensor* workspace_cache, const func_t& f) {
   TORCH_CHECK(iter.ninputs() + iter.noutputs() == Arity);
+  TORCH_CHECK(work_size > 0 &&
+                  work_size <= std::numeric_limits<uint32_t>::max(),
+              "gpu_chunk_kernel: invalid per-thread workspace size");
 
   std::array<char*, Arity> data;
   for (int i = 0; i < Arity; i++) {
@@ -52,26 +50,39 @@ void gpu_chunk_kernel(at::TensorIterator& iter, size_t work_size,
     cached_elem = static_cast<int64_t>(workspace_cache->numel() / work_size);
   }
 
-  // Grow the instance-owned cache only when the current batch needs more
-  // concurrent solver slices.  Smaller batches reuse the existing storage.
-  if (cached_elem < numel) {
+  constexpr int kThreadsPerBlock = 32;
+  constexpr int kResidentWarpsPerSm = 2;
+
+  // Limit resident one-warp scalar solves to preserve cache locality.
+  int sm_count = 0;
+  C10_CUDA_CHECK(cudaDeviceGetAttribute(&sm_count,
+                                        cudaDevAttrMultiProcessorCount,
+                                        iter.device().index()));
+  int64_t concurrency_cap =
+      static_cast<int64_t>(sm_count) * kResidentWarpsPerSm *
+      kThreadsPerBlock;
+  int64_t active_elem = 0;
+  {
     size_t mem_free = 0, mem_total = 0;
     C10_CUDA_CHECK(cudaMemGetInfo(&mem_free, &mem_total));
     int64_t max_elem = static_cast<int64_t>((mem_free / 2) / work_size);
     TORCH_CHECK(max_elem > 0, "gpu_chunk_kernel: per-thread work size (",
                 work_size, " B) exceeds half of free device memory");
-    int64_t target_elem = std::min(numel, max_elem);
+    int64_t target_elem = std::min(numel, std::min(max_elem, concurrency_cap));
     TORCH_CHECK(target_elem <=
                     std::numeric_limits<int64_t>::max() /
                         static_cast<int64_t>(work_size),
                 "gpu_chunk_kernel: workspace size overflows int64_t");
-    *workspace_cache = at::empty(
-        {target_elem * static_cast<int64_t>(work_size)},
-        at::TensorOptions().device(iter.device()).dtype(at::kByte));
-    cached_elem = target_elem;
+    if (cached_elem < target_elem) {
+      *workspace_cache = at::empty(
+          {target_elem * static_cast<int64_t>(work_size)},
+          at::TensorOptions().device(iter.device()).dtype(at::kByte));
+      cached_elem = target_elem;
+    }
+    active_elem = std::min(cached_elem, target_elem);
   }
 
-  int64_t chunks = (numel + cached_elem - 1) / cached_elem;
+  int64_t chunks = (numel + active_elem - 1) / active_elem;
   int64_t base = numel / chunks;
   int64_t rem = numel % chunks;
   char* workspace = static_cast<char*>(workspace_cache->data_ptr());
@@ -88,13 +99,11 @@ void gpu_chunk_kernel(at::TensorIterator& iter, size_t work_size,
 
     auto device_lambda = [=] __device__(int idx) {
       auto offsets = offset_calc.get((int)(idx + chunk_start));
-      f(data.data(), offsets.data());
+      f(data.data(), offsets.data(), chunk_start + idx);
     };
 
-    // Each element is an independent, register-heavy scalar DISORT solve.
-    // A single warp per block exposes more blocks to the scheduler for the
-    // common GCM case where nwave * ncol is only a few hundred.
-    dim3 block(32);
+    // One warp runs each independent scalar DISORT solve.
+    dim3 block(kThreadsPerBlock);
     dim3 grid((unsigned)((chunk_numel + block.x - 1) / block.x));
     element_kernel<<<grid, block, 0, stream>>>(chunk_numel, device_lambda);
     C10_CUDA_KERNEL_LAUNCH_CHECK();

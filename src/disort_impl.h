@@ -19,20 +19,23 @@
 
 namespace disort {
 
-template <typename T>
-DISPATCH_MACRO void disort_impl(T *flx, T *prop, T *umu0, T *phi0, T *fbeam, T *albedo,
-                 T *fluor, T *fisot, T *temis, T *btemp, T *ttemp, T *temf,
-                 int upward, disort_state &ds, disort_output &ds_out,
-                 int nprop) {
+template <int FastFluxNstr = 0, typename T>
+DISPATCH_MACRO void disort_impl(T *flx, T *prop, T *umu0, T *phi0, T *fbeam,
+                                T *albedo, T *fluor, T *fisot, T *temis,
+                                T *btemp, T *ttemp, T *temf, int upward,
+                                disort_state &ds, disort_output &ds_out,
+                                int nprop) {
   // run disort
-  if (ds.flag.planck) {
-    if (upward) {
-      for (int i = 0; i <= ds.nlyr; ++i) {
-        ds.temper[ds.nlyr - i] = TEMF(i);
-      }
-    } else {
-      for (int i = 0; i <= ds.nlyr; ++i) {
-        ds.temper[i] = TEMF(i);
+  if constexpr (FastFluxNstr == 0) {
+    if (ds.flag.planck) {
+      if (upward) {
+        for (int i = 0; i <= ds.nlyr; ++i) {
+          ds.temper[ds.nlyr - i] = TEMF(i);
+        }
+      } else {
+        for (int i = 0; i <= ds.nlyr; ++i) {
+          ds.temper[i] = TEMF(i);
+        }
       }
     }
   }
@@ -95,7 +98,12 @@ DISPATCH_MACRO void disort_impl(T *flx, T *prop, T *umu0, T *phi0, T *fbeam, T *
     }
   }
 
-  c_disort(&ds, &ds_out, c_planck_func2);
+  if constexpr (FastFluxNstr != 0) {
+    c_fast_flux<FastFluxNstr>(&ds, &ds_out);
+  }
+  else {
+    c_disort(&ds, &ds_out, c_planck_func2);
+  }
 
   if (upward) {
     for (int i = 0; i < ds.ntau; ++i) {

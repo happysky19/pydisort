@@ -457,7 +457,7 @@ DISPATCH_MACRO inline void c_surface_bidir(disort_state *ds,
   double
     gmu[NMUG],gwt[NMUG];
   
-  if (pass1) {
+  if (pass1 && !ds->flag.lamber) {
     pass1 = FALSE;
     c_gaussian_quadrature(NMUG/2,gmu,gwt);
     for (k = 1; k <= NMUG/2; k++) {
@@ -641,8 +641,10 @@ DISPATCH_MACRO inline void c_upbeam(disort_state *ds,
 {
   int
     iq,jq,k;
-  double
-    rcond,sum;
+  double sum;
+#ifndef __CUDA_ARCH__
+  double rcond;
+#endif
 
   for (iq = 1; iq <= ds->nstr; iq++) {
     for (jq = 1; jq <= ds->nstr; jq++) {
@@ -659,12 +661,22 @@ DISPATCH_MACRO inline void c_upbeam(disort_state *ds,
    * Find L-U (lower/upper triangular) decomposition of ARRAY and see if it is nearly singular
    * (NOTE:  ARRAY is altered)
    */
+#ifdef __CUDA_ARCH__
+  {
+    int info;
+    c_sgefa(array,ds->nstr,ds->nstr,ipvt,&info);
+    if (info != 0) {
+      c_errmsg("upbeam--sgefa says matrix is singular",DS_WARNING);
+    }
+  }
+#else
   rcond = 0.;
   c_sgeco(array,ds->nstr,ds->nstr,ipvt,&rcond,wk);
 
   if (1.+rcond == 1.) {
     c_errmsg("upbeam--sgeco says matrix near singular",DS_WARNING);
   }
+#endif
 
   /*
    * Solve linear system with coeff matrix ARRAY (assumed already L-U decomposed) and R.H. side(s) ZJ;
@@ -1082,4 +1094,3 @@ DISPATCH_MACRO inline double c_dref(double       wvnmlo,
 }
 
 /*============================= end of c_dref() =========================*/
-

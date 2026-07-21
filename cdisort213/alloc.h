@@ -21,6 +21,8 @@ DISPATCH_MACRO inline void c_disort_state_alloc(disort_state *ds)
   int
     nu=0;
 
+  ds->fast_flux = FALSE;
+
   ds->dtauc = c_dbl_vector(0,ds->nlyr,"ds->dtauc");  
   ds->ssalb = c_dbl_vector(0,ds->nlyr,"ds->ssalb");
   /*
@@ -190,9 +192,17 @@ DISPATCH_MACRO inline void c_disort_out_alloc(disort_state  *ds,
   if ( (!ds->flag.usrang || ds->flag.onlyfl)) {
     nu = ds->nstr;
   }
-  out->uu = c_dbl_vector(0,ds->nphi*nu*ds->ntau,"out->uu");
-
-  out->u0u = c_dbl_vector(0,ds->ntau*nu,"out->u0u");
+#ifdef __CUDA_ARCH__
+  if (ds->flag.onlyfl) {
+    out->uu = NULL;
+    out->u0u = NULL;
+  }
+  else
+#endif
+  {
+    out->uu = c_dbl_vector(0,ds->nphi*nu*ds->ntau,"out->uu");
+    out->u0u = c_dbl_vector(0,ds->ntau*nu,"out->u0u");
+  }
 
   if ( ds->flag.output_uum )
     out->uum = c_dbl_vector(0,ds->nstr*nu*ds->ntau,"out->uum");
@@ -463,4 +473,3 @@ DISPATCH_MACRO inline void c_free_dbl_vector(double *m,
 }
 
 /*============================= end of c_free_dbl_vector() ==============*/
-
