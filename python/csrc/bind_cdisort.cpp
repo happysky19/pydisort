@@ -5,17 +5,17 @@
 #include <disort/disort_formatter.hpp>
 
 // cdisort
-#include <cdisort213/cdisort.h>
+#include <cdisort213/cdisort.hpp>
 
 namespace py = pybind11;
 
-void bind_cdisort(py::module &m) {
+void bind_cdisort(py::module& m) {
   py::class_<disort_state>(m, "disort_state")
 
       .def(py::init<>())
 
       .def("__repr__",
-           [](const disort_state &a) {
+           [](const disort_state& a) {
              return fmt::format("disort_state{}", a);
            })
 

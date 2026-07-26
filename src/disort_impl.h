@@ -1,8 +1,9 @@
 #pragma once
 
 // disort
-#include <cdisort213/cdisort.h>
 #include <disort/index.h>
+
+#include <cdisort213/cdisort.hpp>
 
 #define FLX(i, m) flx[(i) * 2 + (m)]
 #define PROP(i, m) prop[(i) * nprop + (m)]
@@ -19,11 +20,12 @@
 
 namespace disort {
 
-template <typename T>
-void disort_impl(T *flx, T *prop, T *umu0, T *phi0, T *fbeam, T *albedo,
-                 T *fluor, T *fisot, T *temis, T *btemp, T *ttemp, T *temf,
-                 int upward, disort_state &ds, disort_output &ds_out,
-                 int nprop) {
+template <int FastFluxNstr = 0, typename T>
+DISPATCH_MACRO void disort_impl(T* flx, T* prop, T* umu0, T* phi0, T* fbeam,
+                                T* albedo, T* fluor, T* fisot, T* temis,
+                                T* btemp, T* ttemp, T* temf, int upward,
+                                disort_state& ds, disort_output& ds_out,
+                                int nprop) {
   // run disort
   if (ds.flag.planck) {
     if (upward) {
@@ -95,7 +97,11 @@ void disort_impl(T *flx, T *prop, T *umu0, T *phi0, T *fbeam, T *albedo,
     }
   }
 
-  c_disort(&ds, &ds_out, c_planck_func2);
+  if constexpr (FastFluxNstr != 0) {
+    c_fast_flux<FastFluxNstr>(&ds, &ds_out);
+  } else {
+    c_disort(&ds, &ds_out, c_planck_func2);
+  }
 
   if (upward) {
     for (int i = 0; i < ds.ntau; ++i) {

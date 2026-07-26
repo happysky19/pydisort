@@ -2,7 +2,7 @@
 #include <cmath>
 
 // cdisort
-#include <cdisort213/cdisort.h>  // c_getmom
+#include <cdisort213/cdisort.hpp>  // c_getmom
 
 // conflict with torch
 #undef A
@@ -13,7 +13,7 @@
 
 namespace disort {
 
-torch::Tensor scattering_moments(int npmom, std::string const &type, double gg1,
+torch::Tensor scattering_moments(int npmom, std::string const& type, double gg1,
                                  double gg2, double ff) {
   torch::Tensor pmom = torch::zeros({1 + npmom}, torch::kDouble);
   pmom[0] = 1.0;
